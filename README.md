@@ -17,22 +17,18 @@ assert-no-inline-lint-disables --linters LINTERS [OPTIONS] FILE [FILE ...]
 
 ### Required Arguments
 
-| Argument | Description |
-|----------|-------------|
-| `--linters LINTERS` | Comma-separated list of linters to check: `yamllint`, `pylint`, `mypy` |
-| `FILE` | One or more file paths to scan |
+- `--linters LINTERS` - Comma-separated list of linters: `yamllint,pylint,mypy`
+- `FILE` - One or more file paths to scan
 
 ### Optional Arguments
 
-| Argument | Description |
-|----------|-------------|
-| `--exclude PATTERN` | Glob pattern to exclude files (repeatable) |
-| `--quiet` | Suppress output, exit code only |
-| `--count` | Print finding count only |
-| `--json` | Output findings as JSON |
-| `--fail-fast` | Exit on first finding |
-| `--warn-only` | Always exit 0, report only |
-| `--allow PATTERN` | Allow directive pattern (repeatable) |
+- `--exclude PATTERN` - Glob pattern to exclude files (repeatable)
+- `--quiet` - Suppress output, exit code only
+- `--count` - Print finding count only
+- `--json` - Output findings as JSON
+- `--fail-fast` - Exit on first finding
+- `--warn-only` - Always exit 0, report only
+- `--allow PATTERN` - Allow directive pattern (repeatable)
 
 ### Examples
 
@@ -60,11 +56,9 @@ assert-no-inline-lint-disables --linters mypy --warn-only src/*.py
 
 ### Exit Codes
 
-| Code | Meaning |
-|------|---------|
-| `0` | No inline lint-disable directives found |
-| `1` | One or more inline lint-disable directives found |
-| `2` | Usage or runtime error (e.g., file not found, invalid linter) |
+- `0` - No inline lint-disable directives found
+- `1` - One or more inline lint-disable directives found
+- `2` - Usage or runtime error (e.g., file not found, invalid linter)
 
 ### Output Formats
 
@@ -80,8 +74,8 @@ config.yaml:5:yamllint:yamllint disable
 
 ```json
 [
-  {"path": "src/example.py", "line": 10, "linter": "pylint", "directive": "pylint: disable"},
-  {"path": "src/example.py", "line": 15, "linter": "mypy", "directive": "type: ignore"}
+  {"path": "src/example.py", "line": 10, "linter": "pylint"},
+  {"path": "src/example.py", "line": 15, "linter": "mypy"}
 ]
 ```
 
@@ -116,7 +110,7 @@ config.yaml:5:yamllint:yamllint disable
 - Case-insensitive matching
 - Tolerates extra whitespace (e.g., `pylint:  disable`, `type:   ignore`)
 - Finds matches anywhere in the line
-- Does **not** flag "enable" directives (e.g., `yamllint enable`, `pylint: enable`)
+- Does **not** flag "enable" directives (e.g., `yamllint enable`)
 
 ## License
 
