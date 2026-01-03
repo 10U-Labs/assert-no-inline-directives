@@ -725,3 +725,59 @@ if __name__ == "__main__":
         result = run_cli("--linters", "pylint,mypy", str(test_file))
         assert result.returncode == 0
         assert result.stdout == ""
+
+
+@pytest.mark.e2e
+class TestStringLiteralHandling:
+    """E2E tests for string literal false positive prevention."""
+
+    def test_string_literal_not_detected(self, tmp_path: Path) -> None:
+        """Directive in string literal is not detected."""
+        test_file = tmp_path / "test.py"
+        test_file.write_text('s = "# pylint: disable=foo"\n')
+        result = run_cli("--linters", "pylint", str(test_file))
+        assert result.returncode == 0
+
+    def test_multiline_string_not_detected(self, tmp_path: Path) -> None:
+        """Directive in multiline string is not detected."""
+        test_file = tmp_path / "test.py"
+        test_file.write_text('''s = """
+# pylint: disable=foo
+# type: ignore
+"""
+''')
+        result = run_cli("--linters", "pylint,mypy", str(test_file))
+        assert result.returncode == 0
+
+    def test_comment_after_string_detected(self, tmp_path: Path) -> None:
+        """Comment after string literal is detected."""
+        test_file = tmp_path / "test.py"
+        test_file.write_text('s = "text"  # pylint: disable=foo\n')
+        result = run_cli("--linters", "pylint", str(test_file))
+        assert result.returncode == 1
+        assert "pylint: disable" in result.stdout
+
+    def test_regex_pattern_not_detected(self, tmp_path: Path) -> None:
+        """Regex pattern containing directive is not detected."""
+        test_file = tmp_path / "test.py"
+        test_file.write_text('pattern = re.compile(r"pylint:\\s*disable")\n')
+        result = run_cli("--linters", "pylint", str(test_file))
+        assert result.returncode == 0
+
+    def test_test_file_with_directive_strings(self, tmp_path: Path) -> None:
+        """Test file containing directive patterns as test data is clean."""
+        test_file = tmp_path / "test_example.py"
+        test_file.write_text('''"""Tests for linting."""
+
+def test_detects_pylint_disable():
+    """Test that pylint disable is detected."""
+    content = "# pylint: disable=foo"
+    assert "pylint" in content
+
+def test_detects_type_ignore():
+    """Test that type ignore is detected."""
+    line = "x = 1  # type: ignore"
+    assert "ignore" in line
+''')
+        result = run_cli("--linters", "pylint,mypy", str(test_file))
+        assert result.returncode == 0
