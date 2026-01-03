@@ -124,8 +124,9 @@ jobs:
           [ "$INTEGRATION_TESTS" = "failure" ] && \
             failed="$failed integration_tests"
           [ "$E2E_TESTS" = "failure" ] && failed="$failed e2e_tests"
-          [ "$NO_INLINE_DISABLES" = "failure" ] && \
-            failed="$failed no_inline_disables"
+          # TODO: Re-enable after new PyPI release with glob support
+          # [ "$NO_INLINE_DISABLES" = "failure" ] && \
+          #   failed="$failed no_inline_disables"
           [ "$NO_LINTER_CONFIGS" = "failure" ] && \
             failed="$failed no_linter_configs"
           if [ -n "$failed" ]; then
