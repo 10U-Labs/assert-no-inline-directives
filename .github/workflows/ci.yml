@@ -101,8 +101,8 @@ jobs:
           python3 -m pylint src/ \
             --fail-on=C,R,W \
             --fail-under=10.0
-      - name: Install pytest
-        run: pip install pytest
+      - name: Install pytest and coverage
+        run: pip install pytest pytest-cov
       - name: Run pylint on tests
         run: |
           python3 -m pylint test/ \
@@ -122,14 +122,18 @@ jobs:
       - name: Check for duplicate code in tests
         run: |
           jscpd --pattern "**/*.py" --threshold 0 --reporters console test/
-      - name: Run unit tests
+      - name: Run unit tests (100% coverage)
         run: |
           python3 -m pytest test/unit/ \
-            --verbose --pythonwarnings=error
-      - name: Run integration tests
+            --verbose --pythonwarnings=error \
+            --cov=assert_no_inline_lint_disables \
+            --cov-fail-under=100
+      - name: Run integration tests (100% coverage)
         run: |
           python3 -m pytest test/integration/ \
-            --verbose --pythonwarnings=error
+            --verbose --pythonwarnings=error \
+            --cov=assert_no_inline_lint_disables \
+            --cov-fail-under=100
       - name: Run E2E tests
         run: |
           python3 -m pytest test/e2e/ \

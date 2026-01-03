@@ -56,6 +56,14 @@ class TestCliExitCodes:
         result = run_cli(str(test_file))
         assert result.returncode == 2
 
+    def test_exit_2_empty_linters(self, tmp_path: Path) -> None:
+        """Exit code 2 for empty linters string."""
+        test_file = tmp_path / "test.py"
+        test_file.write_text("x = 1\n")
+        result = run_cli("--linters", "", str(test_file))
+        assert result.returncode == 2
+        assert "At least one linter" in result.stderr
+
     def test_exit_2_invalid_linter(self, tmp_path: Path) -> None:
         """Exit code 2 for invalid linter name."""
         test_file = tmp_path / "test.py"
@@ -243,8 +251,7 @@ class TestExcludeFlag:
         file3.write_text("z = 3  # type: ignore\n")
         result = run_cli(
             "--linters", "mypy",
-            "--exclude", "*vendor*",
-            "--exclude", "*generated*",
+            "--exclude", "*vendor*,*generated*",
             str(file1), str(file2), str(file3),
         )
         assert result.returncode == 1
@@ -410,8 +417,7 @@ class TestAllowFlag:
         )
         result = run_cli(
             "--linters", "pylint,mypy",
-            "--allow", "too-many-arguments",
-            "--allow", "type: ignore[import]",
+            "--allow", "too-many-arguments,type: ignore[import]",
             str(test_file),
         )
         assert result.returncode == 1
@@ -504,6 +510,67 @@ class TestMultipleFindings:
         assert result.returncode == 1
         lines = result.stdout.strip().split("\n")
         assert len(lines) == 2
+
+
+@pytest.mark.e2e
+class TestDirectoryHandling:
+    """E2E tests for directory handling."""
+
+    def test_skips_directories_silently(self, tmp_path: Path) -> None:
+        """Directories passed as arguments are silently skipped."""
+        subdir = tmp_path / "subdir"
+        subdir.mkdir()
+        test_file = tmp_path / "test.py"
+        test_file.write_text("x = 1\n")
+        result = run_cli(
+            "--linters", "mypy",
+            str(subdir),
+            str(test_file),
+        )
+        assert result.returncode == 0
+        assert "Error" not in result.stderr
+
+    def test_only_directory_exits_0(self, tmp_path: Path) -> None:
+        """Passing only a directory exits 0 (nothing to scan)."""
+        subdir = tmp_path / "subdir"
+        subdir.mkdir()
+        result = run_cli("--linters", "mypy", str(subdir))
+        assert result.returncode == 0
+
+
+@pytest.mark.e2e
+class TestExtensionFiltering:
+    """E2E tests for file extension filtering."""
+
+    def test_skips_irrelevant_extensions(self, tmp_path: Path) -> None:
+        """Files with irrelevant extensions are silently skipped."""
+        py_file = tmp_path / "test.py"
+        txt_file = tmp_path / "test.txt"
+        py_file.write_text("x = 1  # type: ignore\n")
+        txt_file.write_text("x = 1  # type: ignore\n")
+        result = run_cli(
+            "--linters", "mypy",
+            str(py_file),
+            str(txt_file),
+        )
+        assert result.returncode == 1
+        assert "test.py" in result.stdout
+        assert "test.txt" not in result.stdout
+
+    def test_yamllint_skips_py_files(self, tmp_path: Path) -> None:
+        """Yamllint only scans yaml/yml files."""
+        yaml_file = tmp_path / "test.yaml"
+        py_file = tmp_path / "test.py"
+        yaml_file.write_text("# yamllint disable\n")
+        py_file.write_text("# yamllint disable\n")
+        result = run_cli(
+            "--linters", "yamllint",
+            str(yaml_file),
+            str(py_file),
+        )
+        assert result.returncode == 1
+        assert "test.yaml" in result.stdout
+        assert "test.py" not in result.stdout
 
 
 @pytest.mark.e2e

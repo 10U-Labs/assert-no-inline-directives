@@ -53,6 +53,13 @@ class TestCliExitCodes:
         exit_code = run_main_with_args(["--linters", "eslint", str(test_file)])
         assert exit_code == 2
 
+    def test_exit_2_empty_linters(self, tmp_path: Path) -> None:
+        """Exit code 2 when linters string is empty."""
+        test_file = tmp_path / "test.py"
+        test_file.write_text("x = 1\n")
+        exit_code = run_main_with_args(["--linters", "", str(test_file)])
+        assert exit_code == 2
+
     def test_exit_1_overrides_exit_2(self, tmp_path: Path) -> None:
         """If findings exist, exit 1 even if some files have errors."""
         good_file = tmp_path / "good.py"
@@ -347,8 +354,7 @@ class TestCliAllow:
         )
         run_main_with_args([
             "--linters", "pylint,mypy",
-            "--allow", "type: ignore[import]",
-            "--allow", "too-many-arguments",
+            "--allow", "type: ignore[import],too-many-arguments",
             str(test_file),
         ])
         captured = capsys.readouterr()
@@ -356,3 +362,123 @@ class TestCliAllow:
         assert len(lines) == 1
         assert "type: ignore" in lines[0]
         assert "[import]" not in lines[0]
+
+
+@pytest.mark.integration
+class TestCliExtensionFiltering:
+    """Tests for automatic file extension filtering based on linters."""
+
+    def test_skips_irrelevant_extensions(self, tmp_path: Path) -> None:
+        """Files with irrelevant extensions are skipped."""
+        py_file = tmp_path / "test.py"
+        txt_file = tmp_path / "test.txt"
+        py_file.write_text("x = 1  # type: ignore\n")
+        txt_file.write_text("x = 1  # type: ignore\n")
+        exit_code = run_main_with_args([
+            "--linters", "mypy",
+            str(py_file),
+            str(txt_file),
+        ])
+        assert exit_code == 1  # Only py_file should be scanned
+
+    def test_pylint_only_scans_py(self, tmp_path: Path, capsys: Any) -> None:
+        """Pylint linter only scans .py files."""
+        py_file = tmp_path / "test.py"
+        yaml_file = tmp_path / "test.yaml"
+        py_file.write_text("# pylint: disable=foo\n")
+        yaml_file.write_text("# pylint: disable=foo\n")
+        run_main_with_args([
+            "--linters", "pylint",
+            str(py_file),
+            str(yaml_file),
+        ])
+        captured = capsys.readouterr()
+        assert "test.py" in captured.out
+        assert "test.yaml" not in captured.out
+
+    def test_yamllint_only_scans_yaml_yml(self, tmp_path: Path, capsys: Any) -> None:
+        """Yamllint linter only scans .yaml and .yml files."""
+        yaml_file = tmp_path / "test.yaml"
+        yml_file = tmp_path / "test.yml"
+        py_file = tmp_path / "test.py"
+        yaml_file.write_text("# yamllint disable\n")
+        yml_file.write_text("# yamllint disable\n")
+        py_file.write_text("# yamllint disable\n")
+        run_main_with_args([
+            "--linters", "yamllint",
+            str(yaml_file),
+            str(yml_file),
+            str(py_file),
+        ])
+        captured = capsys.readouterr()
+        assert "test.yaml" in captured.out
+        assert "test.yml" in captured.out
+        assert "test.py" not in captured.out
+
+    def test_combined_linters_scan_all_relevant(
+        self,
+        tmp_path: Path,
+        capsys: Any,
+    ) -> None:
+        """Combined linters scan all relevant file types."""
+        py_file = tmp_path / "test.py"
+        yaml_file = tmp_path / "test.yaml"
+        txt_file = tmp_path / "test.txt"
+        py_file.write_text("# pylint: disable=foo\n")
+        yaml_file.write_text("# yamllint disable\n")
+        txt_file.write_text("# pylint: disable=foo\n")
+        run_main_with_args([
+            "--linters", "pylint,yamllint",
+            str(py_file),
+            str(yaml_file),
+            str(txt_file),
+        ])
+        captured = capsys.readouterr()
+        assert "test.py" in captured.out
+        assert "test.yaml" in captured.out
+        assert "test.txt" not in captured.out
+
+    def test_case_insensitive_extension(self, tmp_path: Path, capsys: Any) -> None:
+        """Extension matching is case-insensitive."""
+        py_file = tmp_path / "test.PY"
+        py_file.write_text("x = 1  # type: ignore\n")
+        run_main_with_args(["--linters", "mypy", str(py_file)])
+        captured = capsys.readouterr()
+        assert "test.PY" in captured.out
+
+
+@pytest.mark.integration
+class TestCliDirectoryHandling:
+    """Tests for directory handling."""
+
+    def test_skips_directories(self, tmp_path: Path) -> None:
+        """Directories are silently skipped."""
+        subdir = tmp_path / "subdir"
+        subdir.mkdir()
+        test_file = tmp_path / "test.py"
+        test_file.write_text("x = 1\n")
+        exit_code = run_main_with_args([
+            "--linters", "mypy",
+            str(subdir),
+            str(test_file),
+        ])
+        assert exit_code == 0
+
+    def test_directories_do_not_cause_errors(
+        self,
+        tmp_path: Path,
+        capsys: Any,
+    ) -> None:
+        """Directories do not produce error messages."""
+        subdir = tmp_path / "subdir"
+        subdir.mkdir()
+        test_file = tmp_path / "test.py"
+        test_file.write_text("x = 1\n")
+        run_main_with_args([
+            "--linters", "mypy",
+            str(subdir),
+            str(test_file),
+        ])
+        captured = capsys.readouterr()
+        assert "Error" not in captured.err
+        assert "Is a directory" not in captured.err

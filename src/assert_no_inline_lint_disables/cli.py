@@ -3,10 +3,12 @@
 import argparse
 import fnmatch
 import json
+import os
 import sys
 
 from assert_no_inline_lint_disables.scanner import (
     Finding,
+    get_relevant_extensions,
     parse_linters,
     scan_file,
 )
@@ -36,10 +38,8 @@ def create_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--exclude",
-        action="append",
-        default=[],
-        metavar="PATTERN",
-        help="Glob pattern to exclude files (repeatable).",
+        metavar="PATTERNS",
+        help="Comma-separated glob patterns to exclude files.",
     )
 
     # Output mode group (mutually exclusive)
@@ -75,13 +75,18 @@ def create_parser() -> argparse.ArgumentParser:
 
     parser.add_argument(
         "--allow",
-        action="append",
-        default=[],
-        metavar="PATTERN",
-        help="Allow directive pattern (repeatable).",
+        metavar="PATTERNS",
+        help="Comma-separated patterns to allow.",
     )
 
     return parser
+
+
+def parse_patterns(patterns_str: str | None) -> list[str]:
+    """Parse comma-separated patterns string into a list."""
+    if not patterns_str:
+        return []
+    return [p.strip() for p in patterns_str.split(",") if p.strip()]
 
 
 def output_findings(
@@ -113,10 +118,24 @@ def main() -> None:
 
     all_findings: list[Finding] = []
     had_error = False
+    relevant_extensions = get_relevant_extensions(linters)
+
+    # Parse comma-separated patterns
+    exclude_patterns = parse_patterns(args.exclude)
+    allow_patterns = parse_patterns(args.allow) or None
 
     for path in args.files:
+        # Skip directories
+        if os.path.isdir(path):
+            continue
+
+        # Skip files with irrelevant extensions
+        _, ext = os.path.splitext(path)
+        if ext.lower() not in relevant_extensions:
+            continue
+
         # Check exclude patterns
-        if any(fnmatch.fnmatch(path, pattern) for pattern in args.exclude):
+        if any(fnmatch.fnmatch(path, pattern) for pattern in exclude_patterns):
             continue
 
         try:
@@ -127,7 +146,7 @@ def main() -> None:
             had_error = True
             continue
 
-        findings = scan_file(path, content, linters, args.allow)
+        findings = scan_file(path, content, linters, allow_patterns)
 
         if findings and args.fail_fast:
             if not args.quiet:
