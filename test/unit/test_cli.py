@@ -14,7 +14,8 @@ def run_main_with_args(args: list[str]) -> int:
     """Run main() with given args and return exit code."""
     with patch.object(sys, "argv", ["test"] + args):
         try:
-            return main()
+            main()
+            return 0  # main() always calls sys.exit(), so this is unreachable
         except SystemExit as e:
             return e.code if isinstance(e.code, int) else 1
 
