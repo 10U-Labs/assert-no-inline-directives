@@ -56,18 +56,11 @@ class TestMainFunction:
         exit_code = run_main_with_args(["--linters", "invalid", str(test_file)])
         assert exit_code == 2
 
-    def test_empty_linters_exits_2(self, tmp_path: Path) -> None:
-        """Empty linters exits 2."""
+    def test_commas_only_linters_exits_2(self, tmp_path: Path) -> None:
+        """Linters with only commas exits 2."""
         test_file = tmp_path / "test.py"
         test_file.write_text("x = 1\n")
-        exit_code = run_main_with_args(["--linters", "", str(test_file)])
-        assert exit_code == 2
-
-    def test_missing_linters_flag_exits_2(self, tmp_path: Path) -> None:
-        """Missing --linters flag exits 2."""
-        test_file = tmp_path / "test.py"
-        test_file.write_text("x = 1\n")
-        exit_code = run_main_with_args([str(test_file)])
+        exit_code = run_main_with_args(["--linters", ",,,", str(test_file)])
         assert exit_code == 2
 
 

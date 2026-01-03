@@ -287,8 +287,8 @@ class TestCliJson:
 
 
 @pytest.mark.integration
-class TestCliFailFast:
-    """Tests for --fail-fast flag."""
+class TestCliBehaviorFlags:
+    """Tests for --fail-fast and --warn-only flags."""
 
     def test_fail_fast_exits_on_first(self, tmp_path: Path, capsys: Any) -> None:
         """Fail-fast exits on first finding."""
@@ -303,11 +303,6 @@ class TestCliFailFast:
         captured = capsys.readouterr()
         lines = captured.out.strip().split("\n")
         assert len(lines) == 1
-
-
-@pytest.mark.integration
-class TestCliWarnOnly:
-    """Tests for --warn-only flag."""
 
     def test_warn_only_exits_0(self, tmp_path: Path) -> None:
         """Warn-only always exits 0."""

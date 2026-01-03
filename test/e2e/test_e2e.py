@@ -1,11 +1,20 @@
 """End-to-end tests for the CLI tool."""
 
 import json
+import subprocess
 from pathlib import Path
 
 import pytest
 
-from test.helpers import run_cli
+
+def run_cli(*args: str) -> subprocess.CompletedProcess[str]:
+    """Run the CLI as a subprocess."""
+    return subprocess.run(
+        ["assert-no-inline-lint-disables", *args],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
 
 
 @pytest.mark.e2e
