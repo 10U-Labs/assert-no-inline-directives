@@ -5,6 +5,7 @@ import pytest
 from assert_no_inline_lint_disables.scanner import (
     Finding,
     VALID_LINTERS,
+    get_linters_for_extension,
     get_relevant_extensions,
     parse_linters,
     scan_file,
@@ -419,3 +420,38 @@ class TestGetRelevantExtensions:
         """Empty linters set returns empty extensions."""
         result = get_relevant_extensions(frozenset())
         assert result == frozenset()
+
+
+@pytest.mark.unit
+class TestGetLintersForExtension:
+    """Tests for get_linters_for_extension function."""
+
+    def test_py_extension_returns_python_linters(self) -> None:
+        """Python file extension returns pylint and mypy."""
+        result = get_linters_for_extension(".py", ALL)
+        assert result == frozenset({"pylint", "mypy"})
+
+    def test_yaml_extension_returns_yamllint(self) -> None:
+        """YAML file extension returns yamllint."""
+        result = get_linters_for_extension(".yaml", ALL)
+        assert result == frozenset({"yamllint"})
+
+    def test_yml_extension_returns_yamllint(self) -> None:
+        """YML file extension returns yamllint."""
+        result = get_linters_for_extension(".yml", ALL)
+        assert result == frozenset({"yamllint"})
+
+    def test_filters_by_requested_linters(self) -> None:
+        """Only returns linters that were requested."""
+        result = get_linters_for_extension(".py", frozenset({"pylint"}))
+        assert result == frozenset({"pylint"})
+
+    def test_unknown_extension_returns_empty(self) -> None:
+        """Unknown extension returns empty set."""
+        result = get_linters_for_extension(".txt", ALL)
+        assert result == frozenset()
+
+    def test_case_insensitive_extension(self) -> None:
+        """Extension matching is case insensitive."""
+        result = get_linters_for_extension(".PY", ALL)
+        assert result == frozenset({"pylint", "mypy"})

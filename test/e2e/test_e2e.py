@@ -226,16 +226,33 @@ class TestLinterFiltering:
 
     def test_all_linters(self, tmp_path: Path) -> None:
         """All three linters can be specified."""
-        test_file = tmp_path / "test.py"
-        test_file.write_text(
+        py_file = tmp_path / "test.py"
+        py_file.write_text(
             "# pylint: disable=foo\n"
             "x = 1  # type: ignore\n"
-            "# yamllint disable\n"
         )
-        result = run_cli("--linters", "yamllint,pylint,mypy", str(test_file))
+        yaml_file = tmp_path / "test.yaml"
+        yaml_file.write_text("# yamllint disable\nkey: value\n")
+        result = run_cli(
+            "--linters", "yamllint,pylint,mypy",
+            str(py_file), str(yaml_file),
+        )
         assert result.returncode == 1
         lines = result.stdout.strip().split("\n")
         assert len(lines) == 3
+
+    def test_linters_filtered_by_extension(self, tmp_path: Path) -> None:
+        """Linters only check files with matching extensions."""
+        py_file = tmp_path / "test.py"
+        py_file.write_text("# yamllint disable\n")  # Should NOT match
+        yaml_file = tmp_path / "test.yaml"
+        yaml_file.write_text("# pylint: disable=foo\n")  # Should NOT match
+        result = run_cli(
+            "--linters", "yamllint,pylint",
+            str(py_file), str(yaml_file),
+        )
+        assert result.returncode == 0
+        assert result.stdout == ""
 
 
 @pytest.mark.e2e

@@ -159,3 +159,23 @@ def get_relevant_extensions(linters: frozenset[str]) -> frozenset[str]:
     for linter in linters:
         extensions.update(LINTER_EXTENSIONS.get(linter, set()))
     return frozenset(extensions)
+
+
+def get_linters_for_extension(
+    extension: str,
+    linters: frozenset[str],
+) -> frozenset[str]:
+    """Get linters that apply to a specific file extension.
+
+    Args:
+        extension: File extension (including the dot, e.g., ".py").
+        linters: Set of linter names to filter.
+
+    Returns:
+        Frozenset of linters that apply to this extension.
+    """
+    ext_lower = extension.lower()
+    return frozenset(
+        linter for linter in linters
+        if ext_lower in LINTER_EXTENSIONS.get(linter, frozenset())
+    )

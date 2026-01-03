@@ -8,6 +8,7 @@ from dataclasses import dataclass, field
 
 from assert_no_inline_lint_disables.scanner import (
     Finding,
+    get_linters_for_extension,
     get_relevant_extensions,
     parse_linters,
     scan_file,
@@ -149,6 +150,10 @@ def _scan_single_file(
     result: _ScanResult,
 ) -> list[Finding] | None:
     """Scan a single file and update result. Returns findings or None on error."""
+    # Filter linters to only those relevant to this file's extension
+    _, ext = os.path.splitext(path)
+    file_linters = get_linters_for_extension(ext, linters)
+
     try:
         with open(path, encoding="utf-8") as f:
             content = f.read()
@@ -156,7 +161,7 @@ def _scan_single_file(
         print(f"Error reading {path}: {e}", file=sys.stderr)
         result.had_error = True
         return None
-    return scan_file(path, content, linters, allow_patterns)
+    return scan_file(path, content, file_linters, allow_patterns)
 
 
 def _process_files(
