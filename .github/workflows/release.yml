@@ -1,0 +1,71 @@
+---
+concurrency:
+  cancel-in-progress: true
+  group: release-${{ github.ref }}
+name: Release
+on:
+  workflow_run:
+    branches:
+      - main
+    types:
+      - completed
+    workflows:
+      - CI
+jobs:
+  release:
+    if: github.event.workflow_run.conclusion == 'success'
+    permissions:
+      contents: write
+      id-token: write
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - id: version
+        name: Get version from pyproject.toml
+        run: |
+          CMD="import tomllib; f = open('pyproject.toml', 'rb')"
+          CMD="$CMD; print(tomllib.load(f)['project']['version'])"
+          VERSION=$(python -c "$CMD")
+          echo "version=v$VERSION" >> $GITHUB_OUTPUT
+      - id: tag_check
+        name: Check if tag exists
+        run: |
+          TAG="${{ steps.version.outputs.version }}"
+          if git ls-remote --tags origin | grep -q "refs/tags/$TAG$"; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
+      - if: steps.tag_check.outputs.exists == 'false'
+        name: Create tag
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag "${{ steps.version.outputs.version }}"
+          git push origin "${{ steps.version.outputs.version }}"
+      - if: steps.tag_check.outputs.exists == 'false'
+        name: Install build tools
+        run: pip install build
+      - if: steps.tag_check.outputs.exists == 'false'
+        name: Build package
+        run: python -m build
+      - if: steps.tag_check.outputs.exists == 'false'
+        name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+      - env:
+          GH_TOKEN: ${{ github.token }}
+        if: steps.tag_check.outputs.exists == 'false'
+        name: Create GitHub Release
+        run: |
+          gh release create "${{ steps.version.outputs.version }}" \
+            --generate-notes
+      - if: steps.tag_check.outputs.exists == 'false'
+        name: Update latest tag
+        run: |
+          git tag -f latest
+          git push origin latest --force

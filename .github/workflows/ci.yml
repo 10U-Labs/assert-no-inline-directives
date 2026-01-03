@@ -3,64 +3,6 @@ concurrency:
   cancel-in-progress: true
   group: ${{ github.workflow }}-${{ github.ref }}
 jobs:
-  release:
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-    needs: test
-    permissions:
-      contents: write
-      id-token: write
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.13"
-      - id: version
-        name: Get version from pyproject.toml
-        run: |
-          CMD="import tomllib; f = open('pyproject.toml', 'rb')"
-          CMD="$CMD; print(tomllib.load(f)['project']['version'])"
-          VERSION=$(python -c "$CMD")
-          echo "version=v$VERSION" >> $GITHUB_OUTPUT
-      - id: tag_check
-        name: Check if tag exists
-        run: |
-          TAG="${{ steps.version.outputs.version }}"
-          if git ls-remote --tags origin | grep -q "refs/tags/$TAG$"; then
-            echo "exists=true" >> $GITHUB_OUTPUT
-          else
-            echo "exists=false" >> $GITHUB_OUTPUT
-          fi
-      - if: steps.tag_check.outputs.exists == 'false'
-        name: Create tag
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git tag "${{ steps.version.outputs.version }}"
-          git push origin "${{ steps.version.outputs.version }}"
-      - if: steps.tag_check.outputs.exists == 'false'
-        name: Install build tools
-        run: pip install build
-      - if: steps.tag_check.outputs.exists == 'false'
-        name: Build package
-        run: python -m build
-      - if: steps.tag_check.outputs.exists == 'false'
-        name: Publish to PyPI
-        uses: pypa/gh-action-pypi-publish@release/v1
-      - env:
-          GH_TOKEN: ${{ github.token }}
-        if: steps.tag_check.outputs.exists == 'false'
-        name: Create GitHub Release
-        run: |
-          gh release create "${{ steps.version.outputs.version }}" \
-            --generate-notes
-      - if: steps.tag_check.outputs.exists == 'false'
-        name: Update latest tag
-        run: |
-          git tag -f latest
-          git push origin latest --force
   test:
     runs-on: ubuntu-latest
     steps:
@@ -94,15 +36,13 @@ jobs:
           echo "markdownlint did not find any issues."
       - name: Install package
         run: pip install -e .
-      - name: Install pylint
-        run: pip install pylint
+      - name: Install pylint and pytest
+        run: pip install pylint pytest
       - name: Run pylint on source
         run: |
           python3 -m pylint src/ \
             --fail-on=C,R,W \
             --fail-under=10.0
-      - name: Install pytest
-        run: pip install pytest
       - name: Run pylint on tests
         run: |
           python3 -m pylint test/ \
@@ -122,14 +62,20 @@ jobs:
       - name: Check for duplicate code in tests
         run: |
           jscpd --pattern "**/*.py" --threshold 0 --reporters console test/
+      - name: Install pytest-cov
+        run: pip install pytest-cov
       - name: Run unit tests
         run: |
           python3 -m pytest test/unit/ \
-            --verbose --pythonwarnings=error
+            --verbose --pythonwarnings=error \
+            --cov=assert_no_inline_lint_disables \
+            --cov-fail-under=100
       - name: Run integration tests
         run: |
           python3 -m pytest test/integration/ \
-            --verbose --pythonwarnings=error
+            --verbose --pythonwarnings=error \
+            --cov=assert_no_inline_lint_disables \
+            --cov-fail-under=100
       - name: Run E2E tests
         run: |
           python3 -m pytest test/e2e/ \

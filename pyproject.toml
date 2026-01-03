@@ -20,7 +20,7 @@ license = "Apache-2.0"
 name = "assert-no-inline-lint-disables"
 readme = "README.md"
 requires-python = ">=3.10"
-version = "1.1.0"
+version = "1.1.1"
 
 [project.scripts]
 assert-no-inline-lint-disables = "assert_no_inline_lint_disables.cli:main"
@@ -29,6 +29,3 @@ assert-no-inline-lint-disables = "assert_no_inline_lint_disables.cli:main"
 Homepage = "https://github.com/10U-Labs-LLC/assert-no-inline-lint-disables"
 Issues = "https://github.com/10U-Labs-LLC/assert-no-inline-lint-disables/issues"
 Repository = "https://github.com/10U-Labs-LLC/assert-no-inline-lint-disables"
-
-[tool.pylint."messages control"]
-disable = ["too-few-public-methods", "wrong-import-order"]

@@ -6,6 +6,13 @@ from dataclasses import dataclass
 
 VALID_LINTERS = frozenset({"yamllint", "pylint", "mypy"})
 
+# File extensions relevant to each linter
+LINTER_EXTENSIONS: dict[str, frozenset[str]] = {
+    "yamllint": frozenset({".yaml", ".yml"}),
+    "pylint": frozenset({".py"}),
+    "mypy": frozenset({".py"}),
+}
+
 
 @dataclass(frozen=True)
 class Finding:
@@ -61,20 +68,17 @@ LINTER_PATTERNS: dict[str, list[tuple[re.Pattern[str], str]]] = {
 
 def scan_line(
     line: str,
-    linters: frozenset[str] | None = None,
+    linters: frozenset[str],
 ) -> list[tuple[str, str]]:
     """Scan a single line for inline lint-disable directives.
 
     Args:
         line: The line of text to scan.
-        linters: Set of linters to check. If None, checks all linters.
+        linters: Set of linters to check.
 
     Returns:
         A list of (linter, directive) tuples for each finding.
     """
-    if linters is None:
-        linters = VALID_LINTERS
-
     findings: list[tuple[str, str]] = []
     for linter in linters:
         patterns = LINTER_PATTERNS.get(linter, [])
@@ -88,7 +92,7 @@ def scan_line(
 def scan_file(
     path: str,
     content: str,
-    linters: frozenset[str] | None = None,
+    linters: frozenset[str],
     allow_patterns: list[str] | None = None,
 ) -> list[Finding]:
     """Scan file content for inline lint-disable directives.
@@ -96,7 +100,7 @@ def scan_file(
     Args:
         path: The file path (used for reporting).
         content: The file content to scan.
-        linters: Set of linters to check. If None, checks all linters.
+        linters: Set of linters to check.
         allow_patterns: List of patterns to allow (skip matching directives).
 
     Returns:
@@ -149,3 +153,18 @@ def parse_linters(linters_str: str) -> frozenset[str]:
         raise ValueError("At least one linter must be specified")
 
     return linters
+
+
+def get_relevant_extensions(linters: frozenset[str]) -> frozenset[str]:
+    """Get file extensions relevant to the specified linters.
+
+    Args:
+        linters: Set of linter names.
+
+    Returns:
+        Frozenset of file extensions (including the dot, e.g., ".py").
+    """
+    extensions: set[str] = set()
+    for linter in linters:
+        extensions.update(LINTER_EXTENSIONS.get(linter, set()))
+    return frozenset(extensions)

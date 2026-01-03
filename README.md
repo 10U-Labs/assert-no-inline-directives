@@ -22,13 +22,13 @@ assert-no-inline-lint-disables --linters LINTERS [OPTIONS] FILE [FILE ...]
 
 ### Optional Arguments
 
-- `--exclude PATTERN` - Glob pattern to exclude files (repeatable)
+- `--exclude PATTERNS` - Comma-separated glob patterns to exclude files
 - `--quiet` - Suppress output, exit code only
 - `--count` - Print finding count only
 - `--json` - Output findings as JSON
 - `--fail-fast` - Exit on first finding
 - `--warn-only` - Always exit 0, report only
-- `--allow PATTERN` - Allow directive pattern (repeatable)
+- `--allow PATTERNS` - Comma-separated patterns to allow
 
 ### Examples
 
