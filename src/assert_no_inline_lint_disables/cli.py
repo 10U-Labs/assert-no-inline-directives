@@ -151,23 +151,34 @@ def _iter_files(paths: list[str]) -> tuple[list[str], list[str]]:
     """Expand paths to a list of files, recursively walking directories.
 
     Supports glob patterns (*, **, ?) with hidden directory matching.
+    Deduplicates files that match multiple patterns or are found via both
+    direct glob matches and directory expansion.
 
     Returns:
         Tuple of (files, missing_paths) where missing_paths are paths that don't exist.
     """
     result: list[str] = []
+    seen: set[str] = set()
     missing: list[str] = []
     for path in paths:
         if _is_glob_pattern(path):
             files, found = _expand_glob(path)
             if found:
-                result.extend(files)
+                for f in files:
+                    if f not in seen:
+                        seen.add(f)
+                        result.append(f)
             else:
                 missing.append(path)
         elif os.path.isdir(path):
-            result.extend(_expand_directory(path))
+            for f in _expand_directory(path):
+                if f not in seen:
+                    seen.add(f)
+                    result.append(f)
         elif os.path.isfile(path):
-            result.append(path)
+            if path not in seen:
+                seen.add(path)
+                result.append(path)
         else:
             missing.append(path)
     return result, missing

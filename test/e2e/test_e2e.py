@@ -836,6 +836,28 @@ class TestGlobPatterns:
         assert result.returncode == 1
         assert ".hidden" in result.stdout
 
+    def test_double_star_glob_deduplicates_files(self, tmp_path: Path) -> None:
+        """Glob pattern **/* does not scan files multiple times.
+
+        Regression test: **/* matches both files directly AND directories.
+        When a directory is matched, it gets expanded to include its files.
+        Without deduplication, files would be scanned once per directory level
+        plus once for the direct match.
+        """
+        # Create nested structure: tmp/sub1/sub2/test.py (depth 3)
+        subdir = tmp_path / "sub1" / "sub2"
+        subdir.mkdir(parents=True)
+        py_file = subdir / "test.py"
+        py_file.write_text("x = 1\n")
+
+        result = run_cli(
+            "--linters", "pylint", "--verbose", str(tmp_path / "**" / "*")
+        )
+        assert result.returncode == 0
+        # Count occurrences of "Scanning:" for this file - should be exactly 1
+        scan_count = result.stdout.count(f"Scanning: {py_file}")
+        assert scan_count == 1, f"File scanned {scan_count} times, expected 1"
+
 
 @pytest.mark.e2e
 class TestTomlSupport:

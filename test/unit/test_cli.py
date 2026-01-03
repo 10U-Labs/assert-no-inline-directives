@@ -441,3 +441,28 @@ class TestGlobPatterns:
         with mock_scan_file([]):
             exit_code = run_main_with_args(["--linters", "pylint", pattern])
         assert exit_code == 0
+
+    def test_double_star_glob_deduplicates_files(self, tmp_path: Path, capsys: Any) -> None:
+        """Glob pattern **/* does not scan files multiple times.
+
+        Regression test: **/* matches both files directly AND directories.
+        When a directory is matched, it gets expanded to include its files.
+        Without deduplication, files would be scanned once per directory level
+        plus once for the direct match.
+        """
+        # Create nested structure: tmp/sub1/sub2/test.py (depth 3)
+        subdir = tmp_path / "sub1" / "sub2"
+        subdir.mkdir(parents=True)
+        py_file = subdir / "test.py"
+        py_file.write_text("x = 1\n")
+
+        pattern = str(tmp_path / "**" / "*")
+        with mock_scan_file([]):
+            exit_code = run_main_with_args(
+                ["--linters", "pylint", "--verbose", pattern]
+            )
+        assert exit_code == 0
+        captured = capsys.readouterr()
+        # Count occurrences of "Scanning:" for this file - should be exactly 1
+        scan_count = captured.out.count(f"Scanning: {py_file}")
+        assert scan_count == 1, f"File scanned {scan_count} times, expected 1"
