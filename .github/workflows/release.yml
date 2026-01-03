@@ -23,9 +23,9 @@ jobs:
       - id: version
         name: Generate version from UTC time
         run: |
-          NEW_VERSION=$(date -u +%Y%m%d%H%M%S)
-          echo "version=$NEW_VERSION" >> $GITHUB_OUTPUT
-          sed -i "s/^version = \".*\"/version = \"$NEW_VERSION\"/" pyproject.toml
+          V=$(date -u +%Y%m%d%H%M%S)
+          echo "version=$V" >> $GITHUB_OUTPUT
+          sed -i "s/^version = \".*\"/version = \"$V\"/" pyproject.toml
       - name: Commit version bump
         run: |
           git add pyproject.toml

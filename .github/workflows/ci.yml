@@ -85,10 +85,11 @@ jobs:
             ${{ steps.mypy_src.outcome }},${{ steps.mypy_test.outcome }},\
             ${{ steps.jscpd_src.outcome }},${{ steps.jscpd_test.outcome }},\
             ${{ steps.unit_tests.outcome }},\
-            ${{ steps.integration_tests.outcome }},${{ steps.e2e_tests.outcome }}"
+            ${{ steps.integration_tests.outcome }},\
+            ${{ steps.e2e_tests.outcome }}"
         name: Assert no step failed
         run: |
-          echo "$S" | grep -q failure && echo "One or more steps failed" && exit 1
+          echo "$S" | grep -q failure && echo "Step(s) failed" && exit 1
           echo "All steps passed"
 name: CI
 on:

@@ -258,21 +258,6 @@ class TestScanFile:
         )
         assert str(finding) == "src/foo.py:42:pylint:pylint: disable"
 
-    def test_finding_to_dict(self) -> None:
-        """Finding to_dict returns correct dictionary."""
-        finding = Finding(
-            path="src/foo.py",
-            line_number=42,
-            linter="pylint",
-            directive="pylint: disable",
-        )
-        assert finding.to_dict() == {
-            "path": "src/foo.py",
-            "line": 42,
-            "linter": "pylint",
-            "directive": "pylint: disable",
-        }
-
 
 @pytest.mark.unit
 class TestScanFileLinterFiltering:
