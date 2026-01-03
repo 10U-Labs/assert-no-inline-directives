@@ -2,9 +2,9 @@
 
 import argparse
 import fnmatch
-import json
 import os
 import sys
+from dataclasses import dataclass, field
 
 from assert_no_inline_lint_disables.scanner import (
     Finding,
@@ -55,9 +55,10 @@ def create_parser() -> argparse.ArgumentParser:
         help="Print finding count only.",
     )
     output_group.add_argument(
-        "--json",
+        "-v",
+        "--verbose",
         action="store_true",
-        help="Output findings as JSON.",
+        help="Show linters, files scanned/skipped, findings, and summary.",
     )
 
     # Behavior modifiers (mutually exclusive)
@@ -89,19 +90,97 @@ def parse_patterns(patterns_str: str | None) -> list[str]:
     return [p.strip() for p in patterns_str.split(",") if p.strip()]
 
 
-def output_findings(
-    findings: list[Finding],
-    use_json: bool,
-    use_count: bool,
-) -> None:
+def _output_findings(findings: list[Finding], use_count: bool) -> None:
     """Output findings in the appropriate format."""
-    if use_json:
-        print(json.dumps([f.to_dict() for f in findings]))
-    elif use_count:
+    if use_count:
         print(len(findings))
     else:
         for finding in findings:
             print(finding)
+
+
+def _check_skip_reason(
+    path: str,
+    relevant_extensions: frozenset[str],
+    exclude_patterns: list[str],
+) -> str | None:
+    """Check if a file should be skipped and return the reason, or None."""
+    if os.path.isdir(path):
+        return "directory"
+    _, ext = os.path.splitext(path)
+    if ext.lower() not in relevant_extensions:
+        return "extension"
+    if any(fnmatch.fnmatch(path, pattern) for pattern in exclude_patterns):
+        return "excluded"
+    return None
+
+
+@dataclass
+class _ScanResult:
+    """Result of scanning files."""
+
+    findings: list[Finding] = field(default_factory=list)
+    files_scanned: int = 0
+    had_error: bool = False
+
+
+def _scan_single_file(
+    path: str,
+    linters: frozenset[str],
+    allow_patterns: list[str] | None,
+    result: _ScanResult,
+) -> list[Finding] | None:
+    """Scan a single file and update result. Returns findings or None on error."""
+    try:
+        with open(path, encoding="utf-8") as f:
+            content = f.read()
+    except OSError as e:
+        print(f"Error reading {path}: {e}", file=sys.stderr)
+        result.had_error = True
+        return None
+    return scan_file(path, content, linters, allow_patterns)
+
+
+def _process_files(
+    args: argparse.Namespace,
+    linters: frozenset[str],
+    exclude_patterns: list[str],
+    allow_patterns: list[str] | None,
+) -> _ScanResult:
+    """Process files and return scan result."""
+    result = _ScanResult()
+    relevant_extensions = get_relevant_extensions(linters)
+
+    for path in args.files:
+        skip_reason = _check_skip_reason(path, relevant_extensions, exclude_patterns)
+        if skip_reason:
+            if args.verbose:
+                print(f"Skipping ({skip_reason}): {path}")
+            continue
+
+        if args.verbose:
+            print(f"Scanning: {path}")
+        result.files_scanned += 1
+
+        findings = _scan_single_file(path, linters, allow_patterns, result)
+        if findings is None:
+            continue
+
+        if findings and args.fail_fast:
+            if args.verbose:
+                print(findings[0])
+                print(f"Scanned {result.files_scanned} file(s), found 1 finding")
+            elif not args.quiet:
+                _output_findings([findings[0]], args.count)
+            sys.exit(EXIT_FINDINGS)
+
+        if args.verbose:
+            for finding in findings:
+                print(finding)
+
+        result.findings.extend(findings)
+
+    return result
 
 
 def main() -> None:
@@ -109,64 +188,29 @@ def main() -> None:
     parser = create_parser()
     args = parser.parse_args()
 
-    # Parse and validate linters
     try:
         linters = parse_linters(args.linters)
     except ValueError as e:
         print(f"Error: {e}", file=sys.stderr)
         sys.exit(EXIT_ERROR)
 
-    all_findings: list[Finding] = []
-    had_error = False
-    relevant_extensions = get_relevant_extensions(linters)
+    if args.verbose:
+        print(f"Checking for: {', '.join(sorted(linters))}")
 
-    # Parse comma-separated patterns
     exclude_patterns = parse_patterns(args.exclude)
     allow_patterns = parse_patterns(args.allow) or None
 
-    for path in args.files:
-        # Skip directories
-        if os.path.isdir(path):
-            continue
+    result = _process_files(args, linters, exclude_patterns, allow_patterns)
 
-        # Skip files with irrelevant extensions
-        _, ext = os.path.splitext(path)
-        if ext.lower() not in relevant_extensions:
-            continue
+    if args.verbose:
+        print(f"Scanned {result.files_scanned} file(s), found {len(result.findings)} finding(s)")
+    elif not args.quiet:
+        _output_findings(result.findings, args.count)
 
-        # Check exclude patterns
-        if any(fnmatch.fnmatch(path, pattern) for pattern in exclude_patterns):
-            continue
-
-        try:
-            with open(path, encoding="utf-8") as f:
-                content = f.read()
-        except OSError as e:
-            print(f"Error reading {path}: {e}", file=sys.stderr)
-            had_error = True
-            continue
-
-        findings = scan_file(path, content, linters, allow_patterns)
-
-        if findings and args.fail_fast:
-            if not args.quiet:
-                output_findings([findings[0]], args.json, args.count)
-            sys.exit(EXIT_FINDINGS)
-
-        all_findings.extend(findings)
-
-    # Handle output
-    if not args.quiet:
-        output_findings(all_findings, args.json, args.count)
-
-    # Determine exit code
     if args.warn_only:
         sys.exit(EXIT_SUCCESS)
-
-    if all_findings:
+    if result.findings:
         sys.exit(EXIT_FINDINGS)
-
-    if had_error:
+    if result.had_error:
         sys.exit(EXIT_ERROR)
-
     sys.exit(EXIT_SUCCESS)

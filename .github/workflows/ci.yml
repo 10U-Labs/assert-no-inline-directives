@@ -12,9 +12,17 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.13"
-      - name: Install yamllint
-        run: pip install yamllint
-      - name: yamllint
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Install dependencies
+        run: |
+          pip install yamllint pylint pytest mypy pytest-cov -e .
+          npm install -g markdownlint-cli jscpd
+      - continue-on-error: true
+        id: yamllint
+        name: yamllint
         run: |
           EMPTY_LINES='empty-lines: {max: 0, max-start: 0, max-end: 1}'
           KEY_ORDERING='key-ordering: enable'
@@ -22,64 +30,87 @@ jobs:
           RULES="$EMPTY_LINES, $KEY_ORDERING, $TRUTHY"
           yamllint --strict \
             --config-data "{extends: default, rules: {$RULES}}" \
-            .github/workflows/ci.yml && \
-          echo "yamllint did not find any issues."
-      - name: Set up Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-      - name: Install markdownlint-cli
-        run: npm install -g markdownlint-cli
-      - name: markdownlint
-        run: |
-          markdownlint '*.md' && \
-          echo "markdownlint did not find any issues."
-      - name: Install package
-        run: pip install -e .
-      - name: Install pylint and pytest
-        run: pip install pylint pytest
-      - name: Run pylint on source
-        run: |
-          python3 -m pylint src/ \
-            --fail-on=C,R,W \
-            --fail-under=10.0
-      - name: Run pylint on tests
-        run: |
-          python3 -m pylint test/ \
-            --fail-on=C,R,W \
-            --fail-under=10.0
-      - name: Install mypy
-        run: pip install mypy
-      - name: Run mypy on source
+            .github/workflows/*.yml
+      - continue-on-error: true
+        id: markdownlint
+        name: markdownlint
+        run: markdownlint '*.md'
+      - continue-on-error: true
+        id: pylint_src
+        name: pylint (src)
+        run: python3 -m pylint src/ --fail-on=C,R,W --fail-under=10.0
+      - continue-on-error: true
+        id: pylint_test
+        name: pylint (test)
+        run: python3 -m pylint test/ --fail-on=C,R,W --fail-under=10.0
+      - continue-on-error: true
+        id: mypy_src
+        name: mypy (src)
         run: python3 -m mypy --strict src/
-      - name: Run mypy on tests
+      - continue-on-error: true
+        id: mypy_test
+        name: mypy (test)
         run: python3 -m mypy test/
-      - name: Install jscpd
-        run: npm install -g jscpd
-      - name: Check for duplicate code in source
-        run: |
-          jscpd --pattern "**/*.py" --threshold 0 --reporters console src/
-      - name: Check for duplicate code in tests
-        run: |
-          jscpd --pattern "**/*.py" --threshold 0 --reporters console test/
-      - name: Install pytest-cov
-        run: pip install pytest-cov
-      - name: Run unit tests
+      - continue-on-error: true
+        id: jscpd_src
+        name: jscpd (src)
+        run: jscpd --pattern "**/*.py" --threshold 0 --reporters console src/
+      - continue-on-error: true
+        id: jscpd_test
+        name: jscpd (test)
+        run: jscpd --pattern "**/*.py" --threshold 0 --reporters console test/
+      - continue-on-error: true
+        id: unit_tests
+        name: Unit tests
         run: |
           python3 -m pytest test/unit/ \
             --verbose --pythonwarnings=error \
             --cov=assert_no_inline_lint_disables \
             --cov-fail-under=100
-      - name: Run integration tests
+      - continue-on-error: true
+        id: integration_tests
+        name: Integration tests
         run: |
           python3 -m pytest test/integration/ \
             --verbose --pythonwarnings=error \
             --cov=assert_no_inline_lint_disables \
             --cov-fail-under=100
-      - name: Run E2E tests
+      - continue-on-error: true
+        id: e2e_tests
+        name: E2E tests
+        run: python3 -m pytest test/e2e/ --verbose --pythonwarnings=error
+      - env:
+          E2E_TESTS: ${{ steps.e2e_tests.outcome }}
+          INTEGRATION_TESTS: ${{ steps.integration_tests.outcome }}
+          JSCPD_SRC: ${{ steps.jscpd_src.outcome }}
+          JSCPD_TEST: ${{ steps.jscpd_test.outcome }}
+          MARKDOWNLINT: ${{ steps.markdownlint.outcome }}
+          MYPY_SRC: ${{ steps.mypy_src.outcome }}
+          MYPY_TEST: ${{ steps.mypy_test.outcome }}
+          PYLINT_SRC: ${{ steps.pylint_src.outcome }}
+          PYLINT_TEST: ${{ steps.pylint_test.outcome }}
+          UNIT_TESTS: ${{ steps.unit_tests.outcome }}
+          YAMLLINT: ${{ steps.yamllint.outcome }}
+        name: Assert no step failed
         run: |
-          python3 -m pytest test/e2e/ \
-            --verbose --pythonwarnings=error
+          failed=""
+          [ "$YAMLLINT" = "failure" ] && failed="$failed yamllint"
+          [ "$MARKDOWNLINT" = "failure" ] && failed="$failed markdownlint"
+          [ "$PYLINT_SRC" = "failure" ] && failed="$failed pylint_src"
+          [ "$PYLINT_TEST" = "failure" ] && failed="$failed pylint_test"
+          [ "$MYPY_SRC" = "failure" ] && failed="$failed mypy_src"
+          [ "$MYPY_TEST" = "failure" ] && failed="$failed mypy_test"
+          [ "$JSCPD_SRC" = "failure" ] && failed="$failed jscpd_src"
+          [ "$JSCPD_TEST" = "failure" ] && failed="$failed jscpd_test"
+          [ "$UNIT_TESTS" = "failure" ] && failed="$failed unit_tests"
+          [ "$INTEGRATION_TESTS" = "failure" ] && \
+            failed="$failed integration_tests"
+          [ "$E2E_TESTS" = "failure" ] && failed="$failed e2e_tests"
+          if [ -n "$failed" ]; then
+            echo "Steps that failed:$failed"
+            exit 1
+          fi
+          echo "All steps succeeded"
 name: CI
 on:
   pull_request:

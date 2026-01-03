@@ -27,15 +27,6 @@ class Finding:
         """Format finding as path:line:linter:directive."""
         return f"{self.path}:{self.line_number}:{self.linter}:{self.directive}"
 
-    def to_dict(self) -> dict[str, str | int]:
-        """Convert finding to dictionary for JSON output."""
-        return {
-            "path": self.path,
-            "line": self.line_number,
-            "linter": self.linter,
-            "directive": self.directive,
-        }
-
 
 # Patterns for detecting inline lint-disable directives (suppressions only).
 # Each pattern uses \\s* to tolerate extra whitespace.

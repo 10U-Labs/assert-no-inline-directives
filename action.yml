@@ -18,16 +18,16 @@ inputs:
   files:
     description: Target files to check (space-separated)
     required: true
-  json:
-    default: "false"
-    description: Output findings as JSON
-    required: false
   linters:
     description: Comma-separated list of linters (yamllint,pylint,mypy)
     required: true
   quiet:
     default: "false"
     description: Suppress output, exit code only
+    required: false
+  verbose:
+    default: "false"
+    description: Show linters, files scanned/skipped, findings, and summary
     required: false
   warn-only:
     default: "false"
@@ -42,7 +42,7 @@ runs:
         ARGS="--linters ${{ inputs.linters }}"
         [ "${{ inputs.quiet }}" = "true" ] && ARGS="$ARGS --quiet"
         [ "${{ inputs.count }}" = "true" ] && ARGS="$ARGS --count"
-        [ "${{ inputs.json }}" = "true" ] && ARGS="$ARGS --json"
+        [ "${{ inputs.verbose }}" = "true" ] && ARGS="$ARGS --verbose"
         [ "${{ inputs.fail-fast }}" = "true" ] && ARGS="$ARGS --fail-fast"
         [ "${{ inputs.warn-only }}" = "true" ] && ARGS="$ARGS --warn-only"
         for pattern in ${{ inputs.exclude }}; do

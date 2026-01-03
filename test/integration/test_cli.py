@@ -1,6 +1,5 @@
 """Integration tests for the CLI module."""
 
-import json
 from pathlib import Path
 from typing import Any
 from unittest.mock import patch
@@ -262,31 +261,6 @@ class TestCliCount:
 
 
 @pytest.mark.integration
-class TestCliJson:
-    """Tests for --json flag."""
-
-    def test_json_output(self, tmp_path: Path, capsys: Any) -> None:
-        """JSON mode outputs valid JSON."""
-        test_file = tmp_path / "test.py"
-        test_file.write_text("x = 1  # type: ignore\n")
-        run_main_with_args(["--linters", "mypy", "--json", str(test_file)])
-        captured = capsys.readouterr()
-        data = json.loads(captured.out)
-        assert len(data) == 1
-        assert data[0]["linter"] == "mypy"
-        assert data[0]["line"] == 1
-
-    def test_json_empty_array(self, tmp_path: Path, capsys: Any) -> None:
-        """JSON mode outputs empty array for clean files."""
-        test_file = tmp_path / "clean.py"
-        test_file.write_text("x = 1\n")
-        run_main_with_args(["--linters", "mypy", "--json", str(test_file)])
-        captured = capsys.readouterr()
-        data = json.loads(captured.out)
-        assert data == []
-
-
-@pytest.mark.integration
 class TestCliBehaviorFlags:
     """Tests for --fail-fast and --warn-only flags."""
 
@@ -440,6 +414,53 @@ class TestCliExtensionFiltering:
         run_main_with_args(["--linters", "mypy", str(py_file)])
         captured = capsys.readouterr()
         assert "test.PY" in captured.out
+
+
+@pytest.mark.integration
+class TestCliVerbose:
+    """Tests for --verbose flag integration scenarios."""
+
+    def test_verbose_full_workflow(self, tmp_path: Path, capsys: Any) -> None:
+        """Verbose shows complete workflow: linters, skips, scans, findings, summary."""
+        # Create various files to test all verbose output types
+        py_file = tmp_path / "code.py"
+        py_file.write_text("x = 1  # type: ignore\n")
+        txt_file = tmp_path / "notes.txt"
+        txt_file.write_text("not scanned\n")
+        subdir = tmp_path / "subdir"
+        subdir.mkdir()
+        excluded = tmp_path / "generated.py"
+        excluded.write_text("# pylint: disable=foo\n")
+        run_main_with_args([
+            "--linters", "pylint,mypy",
+            "--verbose",
+            "--exclude", "*generated.py",
+            str(py_file), str(txt_file), str(subdir), str(excluded),
+        ])
+        out = capsys.readouterr().out
+        assert "Checking for:" in out
+        assert "Scanning:" in out
+        assert "Skipping (extension):" in out
+        assert "Skipping (directory):" in out
+        assert "Skipping (excluded):" in out
+        assert "type: ignore" in out
+        assert "Scanned 1 file(s), found 1 finding(s)" in out
+
+    def test_verbose_fail_fast_stops_early(self, tmp_path: Path, capsys: Any) -> None:
+        """Verbose with fail-fast stops after first finding and shows summary."""
+        file1 = tmp_path / "first.py"
+        file1.write_text("# pylint: disable=one\n")
+        file2 = tmp_path / "second.py"
+        file2.write_text("# pylint: disable=two\n")
+        run_main_with_args([
+            "--linters", "pylint", "--verbose", "--fail-fast",
+            str(file1), str(file2),
+        ])
+        out = capsys.readouterr().out
+        assert "first.py" in out
+        assert "pylint: disable" in out
+        assert "second.py" not in out
+        assert "found 1 finding" in out
 
 
 @pytest.mark.integration

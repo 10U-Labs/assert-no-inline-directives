@@ -89,16 +89,6 @@ class TestOutputFormats:
         captured = capsys.readouterr()
         assert "2" in captured.out
 
-    def test_json_output(self, tmp_path: Path, capsys: Any) -> None:
-        """JSON flag outputs JSON."""
-        test_file = tmp_path / "test.py"
-        test_file.write_text("# pylint: disable=foo\n")
-        run_main_with_args(["--linters", "pylint", "--json", str(test_file)])
-        captured = capsys.readouterr()
-        assert "[" in captured.out
-        assert "]" in captured.out
-
-
 @pytest.mark.unit
 class TestFlags:
     """Tests for various flags."""
@@ -170,3 +160,114 @@ class TestDirectoryAndExtensionHandling:
         py_file.write_text("# pylint: disable=foo\n")
         exit_code = run_main_with_args(["--linters", "pylint", str(py_file)])
         assert exit_code == 1
+
+
+@pytest.mark.unit
+class TestVerboseFlag:
+    """Tests for the --verbose flag."""
+
+    def test_verbose_shows_linters(self, tmp_path: Path, capsys: Any) -> None:
+        """Verbose shows linters being checked."""
+        test_file = tmp_path / "test.py"
+        test_file.write_text("x = 1\n")
+        run_main_with_args(
+            ["--linters", "pylint,mypy", "--verbose", str(test_file)]
+        )
+        captured = capsys.readouterr()
+        assert "Checking for: mypy, pylint" in captured.out
+
+    def test_verbose_shows_scanning(self, tmp_path: Path, capsys: Any) -> None:
+        """Verbose shows files being scanned."""
+        test_file = tmp_path / "test.py"
+        test_file.write_text("x = 1\n")
+        run_main_with_args(["--linters", "pylint", "--verbose", str(test_file)])
+        captured = capsys.readouterr()
+        assert f"Scanning: {test_file}" in captured.out
+
+    def test_verbose_shows_skipped_directory(
+        self, tmp_path: Path, capsys: Any
+    ) -> None:
+        """Verbose shows skipped directories."""
+        subdir = tmp_path / "subdir"
+        subdir.mkdir()
+        run_main_with_args(["--linters", "pylint", "--verbose", str(subdir)])
+        captured = capsys.readouterr()
+        assert f"Skipping (directory): {subdir}" in captured.out
+
+    def test_verbose_shows_skipped_extension(
+        self, tmp_path: Path, capsys: Any
+    ) -> None:
+        """Verbose shows skipped extensions."""
+        txt_file = tmp_path / "test.txt"
+        txt_file.write_text("content\n")
+        run_main_with_args(["--linters", "pylint", "--verbose", str(txt_file)])
+        captured = capsys.readouterr()
+        assert f"Skipping (extension): {txt_file}" in captured.out
+
+    def test_verbose_shows_skipped_excluded(
+        self, tmp_path: Path, capsys: Any
+    ) -> None:
+        """Verbose shows skipped excluded files."""
+        test_file = tmp_path / "generated.py"
+        test_file.write_text("x = 1\n")
+        run_main_with_args([
+            "--linters", "pylint",
+            "--verbose",
+            "--exclude", "*generated.py",
+            str(test_file),
+        ])
+        captured = capsys.readouterr()
+        assert f"Skipping (excluded): {test_file}" in captured.out
+
+    def test_verbose_shows_findings(self, tmp_path: Path, capsys: Any) -> None:
+        """Verbose shows findings inline."""
+        test_file = tmp_path / "test.py"
+        test_file.write_text("# pylint: disable=foo\n")
+        run_main_with_args(["--linters", "pylint", "--verbose", str(test_file)])
+        captured = capsys.readouterr()
+        assert "pylint: disable" in captured.out
+
+    def test_verbose_shows_summary(self, tmp_path: Path, capsys: Any) -> None:
+        """Verbose shows summary at end."""
+        test_file = tmp_path / "test.py"
+        test_file.write_text("# pylint: disable=foo\n")
+        run_main_with_args(["--linters", "pylint", "--verbose", str(test_file)])
+        captured = capsys.readouterr()
+        assert "Scanned 1 file(s), found 1 finding(s)" in captured.out
+
+    def test_verbose_short_flag(self, tmp_path: Path, capsys: Any) -> None:
+        """Short -v flag works."""
+        test_file = tmp_path / "test.py"
+        test_file.write_text("x = 1\n")
+        run_main_with_args(["--linters", "pylint", "-v", str(test_file)])
+        captured = capsys.readouterr()
+        assert "Checking for: pylint" in captured.out
+
+    def test_verbose_mutually_exclusive_with_quiet(self, tmp_path: Path) -> None:
+        """Verbose and quiet are mutually exclusive."""
+        test_file = tmp_path / "test.py"
+        test_file.write_text("x = 1\n")
+        exit_code = run_main_with_args([
+            "--linters", "pylint", "--verbose", "--quiet", str(test_file)
+        ])
+        assert exit_code == 2
+
+    def test_verbose_mutually_exclusive_with_count(self, tmp_path: Path) -> None:
+        """Verbose and count are mutually exclusive."""
+        test_file = tmp_path / "test.py"
+        test_file.write_text("x = 1\n")
+        exit_code = run_main_with_args([
+            "--linters", "pylint", "--verbose", "--count", str(test_file)
+        ])
+        assert exit_code == 2
+
+    def test_verbose_with_fail_fast(self, tmp_path: Path, capsys: Any) -> None:
+        """Verbose with fail-fast shows finding and summary."""
+        test_file = tmp_path / "test.py"
+        test_file.write_text("# pylint: disable=a\n# pylint: disable=b\n")
+        run_main_with_args([
+            "--linters", "pylint", "--verbose", "--fail-fast", str(test_file)
+        ])
+        captured = capsys.readouterr()
+        assert "pylint: disable" in captured.out
+        assert "found 1 finding" in captured.out

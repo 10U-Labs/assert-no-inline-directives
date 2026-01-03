@@ -1,6 +1,5 @@
 """End-to-end tests for the CLI tool."""
 
-import json
 import subprocess
 from pathlib import Path
 
@@ -311,40 +310,6 @@ class TestCountFlag:
 
 
 @pytest.mark.e2e
-class TestJsonFlag:
-    """E2E tests for --json flag."""
-
-    def test_json_output(self, tmp_path: Path) -> None:
-        """JSON mode outputs valid JSON."""
-        test_file = tmp_path / "test.py"
-        test_file.write_text("x = foo()  # type: ignore\n")
-        result = run_cli("--linters", "mypy", "--json", str(test_file))
-        assert result.returncode == 1
-        data = json.loads(result.stdout)
-        assert len(data) == 1
-        assert data[0]["linter"] == "mypy"
-        assert data[0]["line"] == 1
-        assert data[0]["directive"] == "type: ignore"
-
-    def test_json_empty_array(self, tmp_path: Path) -> None:
-        """JSON mode outputs empty array for clean files."""
-        test_file = tmp_path / "clean.py"
-        test_file.write_text("x = 1\n")
-        result = run_cli("--linters", "mypy", "--json", str(test_file))
-        assert result.returncode == 0
-        data = json.loads(result.stdout)
-        assert data == []
-
-    def test_json_multiple_findings(self, tmp_path: Path) -> None:
-        """JSON mode outputs all findings."""
-        test_file = tmp_path / "test.py"
-        test_file.write_text("# pylint: disable=foo\nx = 1  # type: ignore\n")
-        result = run_cli("--linters", "pylint,mypy", "--json", str(test_file))
-        data = json.loads(result.stdout)
-        assert len(data) == 2
-
-
-@pytest.mark.e2e
 class TestFailFastFlag:
     """E2E tests for --fail-fast flag."""
 
@@ -368,6 +333,82 @@ class TestFailFastFlag:
         )
         assert result.returncode == 1
         assert result.stdout == ""
+
+
+@pytest.mark.e2e
+class TestVerboseFlag:
+    """E2E tests for --verbose flag."""
+
+    def test_verbose_shows_linters(self, tmp_path: Path) -> None:
+        """Verbose shows linters being checked."""
+        test_file = tmp_path / "test.py"
+        test_file.write_text("x = 1\n")
+        result = run_cli("--linters", "pylint,mypy", "--verbose", str(test_file))
+        assert result.returncode == 0
+        assert "Checking for:" in result.stdout
+        assert "mypy" in result.stdout
+        assert "pylint" in result.stdout
+
+    def test_verbose_shows_scanning(self, tmp_path: Path) -> None:
+        """Verbose shows files being scanned."""
+        test_file = tmp_path / "test.py"
+        test_file.write_text("x = 1\n")
+        result = run_cli("--linters", "pylint", "--verbose", str(test_file))
+        assert result.returncode == 0
+        assert "Scanning:" in result.stdout
+
+    def test_verbose_shows_skipping(self, tmp_path: Path) -> None:
+        """Verbose shows files being skipped."""
+        txt_file = tmp_path / "test.txt"
+        txt_file.write_text("x = 1\n")
+        result = run_cli("--linters", "pylint", "--verbose", str(txt_file))
+        assert result.returncode == 0
+        assert "Skipping (extension):" in result.stdout
+
+    def test_verbose_shows_findings(self, tmp_path: Path) -> None:
+        """Verbose shows findings inline."""
+        test_file = tmp_path / "test.py"
+        test_file.write_text("# pylint: disable=foo\n")
+        result = run_cli("--linters", "pylint", "--verbose", str(test_file))
+        assert result.returncode == 1
+        assert "pylint: disable" in result.stdout
+
+    def test_verbose_shows_summary(self, tmp_path: Path) -> None:
+        """Verbose shows summary at end."""
+        test_file = tmp_path / "test.py"
+        test_file.write_text("# pylint: disable=foo\n")
+        result = run_cli("--linters", "pylint", "--verbose", str(test_file))
+        assert result.returncode == 1
+        assert "Scanned 1 file(s)" in result.stdout
+        assert "found 1 finding(s)" in result.stdout
+
+    def test_verbose_with_fail_fast(self, tmp_path: Path) -> None:
+        """Verbose with fail-fast shows one finding and exits."""
+        test_file = tmp_path / "test.py"
+        test_file.write_text("# pylint: disable=a\n# pylint: disable=b\n")
+        result = run_cli(
+            "--linters", "pylint", "--verbose", "--fail-fast", str(test_file)
+        )
+        assert result.returncode == 1
+        assert "found 1 finding" in result.stdout
+
+    def test_verbose_mutually_exclusive_with_quiet(self, tmp_path: Path) -> None:
+        """Verbose and quiet are mutually exclusive."""
+        test_file = tmp_path / "test.py"
+        test_file.write_text("x = 1\n")
+        result = run_cli(
+            "--linters", "pylint", "--verbose", "--quiet", str(test_file)
+        )
+        assert result.returncode == 2
+
+    def test_verbose_mutually_exclusive_with_count(self, tmp_path: Path) -> None:
+        """Verbose and count are mutually exclusive."""
+        test_file = tmp_path / "test.py"
+        test_file.write_text("x = 1\n")
+        result = run_cli(
+            "--linters", "pylint", "--verbose", "--count", str(test_file)
+        )
+        assert result.returncode == 2
 
 
 @pytest.mark.e2e
