@@ -79,24 +79,17 @@ jobs:
         id: e2e_tests
         name: E2E tests
         run: python3 -m pytest test/e2e/ --verbose --pythonwarnings=error
-      - name: Assert no step failed
+      - env:
+          S: "${{ steps.yamllint.outcome }},${{ steps.markdownlint.outcome }},\
+            ${{ steps.pylint_src.outcome }},${{ steps.pylint_test.outcome }},\
+            ${{ steps.mypy_src.outcome }},${{ steps.mypy_test.outcome }},\
+            ${{ steps.jscpd_src.outcome }},${{ steps.jscpd_test.outcome }},\
+            ${{ steps.unit_tests.outcome }},\
+            ${{ steps.integration_tests.outcome }},${{ steps.e2e_tests.outcome }}"
+        name: Assert no step failed
         run: |
-          failed=""
-          [ "${{ steps.yamllint.outcome }}" = "failure" ] && failed="$failed yamllint"
-          [ "${{ steps.markdownlint.outcome }}" = "failure" ] && failed="$failed markdownlint"
-          [ "${{ steps.pylint_src.outcome }}" = "failure" ] && failed="$failed pylint(src)"
-          [ "${{ steps.pylint_test.outcome }}" = "failure" ] && failed="$failed pylint(test)"
-          [ "${{ steps.mypy_src.outcome }}" = "failure" ] && failed="$failed mypy(src)"
-          [ "${{ steps.mypy_test.outcome }}" = "failure" ] && failed="$failed mypy(test)"
-          [ "${{ steps.jscpd_src.outcome }}" = "failure" ] && failed="$failed jscpd(src)"
-          [ "${{ steps.jscpd_test.outcome }}" = "failure" ] && failed="$failed jscpd(test)"
-          [ "${{ steps.unit_tests.outcome }}" = "failure" ] && failed="$failed unit-tests"
-          [ "${{ steps.integration_tests.outcome }}" = "failure" ] && failed="$failed integration-tests"
-          [ "${{ steps.e2e_tests.outcome }}" = "failure" ] && failed="$failed e2e-tests"
-          if [ -n "$failed" ]; then
-            echo "Failed checks:$failed"
-            exit 1
-          fi
+          echo "$S" | grep -q failure && echo "One or more steps failed" && exit 1
+          echo "All steps passed"
 name: CI
 on:
   pull_request:

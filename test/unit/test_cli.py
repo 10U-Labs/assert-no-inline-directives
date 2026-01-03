@@ -260,3 +260,14 @@ class TestVerboseFlag:
             "--linters", "pylint", "--verbose", "--count", str(test_file)
         ])
         assert exit_code == 2
+
+    def test_verbose_with_fail_fast(self, tmp_path: Path, capsys: Any) -> None:
+        """Verbose with fail-fast shows finding and summary."""
+        test_file = tmp_path / "test.py"
+        test_file.write_text("# pylint: disable=a\n# pylint: disable=b\n")
+        run_main_with_args([
+            "--linters", "pylint", "--verbose", "--fail-fast", str(test_file)
+        ])
+        captured = capsys.readouterr()
+        assert "pylint: disable" in captured.out
+        assert "found 1 finding" in captured.out
