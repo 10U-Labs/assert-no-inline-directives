@@ -621,3 +621,60 @@ class TestCliDirectoryHandling:
             assert "type: ignore" in captured.out
         finally:
             unreadable.chmod(0o644)
+
+
+@pytest.mark.integration
+class TestCliGlobPatterns:
+    """Tests for glob pattern expansion."""
+
+    def test_glob_pattern_matches_files(self, tmp_path: Path) -> None:
+        """Glob pattern expands to matching files."""
+        py_file = tmp_path / "test.py"
+        py_file.write_text("x = 1  # type: ignore\n")
+        pattern = str(tmp_path / "*.py")
+        exit_code = run_main_with_args(["--linters", "mypy", pattern])
+        assert exit_code == 1
+
+    def test_glob_pattern_matches_directory(self, tmp_path: Path) -> None:
+        """Glob pattern matching directory expands to files inside."""
+        subdir = tmp_path / "subdir"
+        subdir.mkdir()
+        py_file = subdir / "test.py"
+        py_file.write_text("x = 1  # type: ignore\n")
+        pattern = str(tmp_path / "sub*")
+        exit_code = run_main_with_args(["--linters", "mypy", pattern])
+        assert exit_code == 1
+
+    def test_glob_pattern_no_match_exits_2(self, tmp_path: Path, capsys: Any) -> None:
+        """Glob pattern that matches nothing exits 2."""
+        pattern = str(tmp_path / "nonexistent*.py")
+        exit_code = run_main_with_args(["--linters", "pylint", pattern])
+        assert exit_code == 2
+        captured = capsys.readouterr()
+        assert "No such file or directory" in captured.err
+
+    def test_recursive_glob_pattern(self, tmp_path: Path) -> None:
+        """Recursive glob pattern (**) matches nested files."""
+        subdir = tmp_path / "deep" / "nested"
+        subdir.mkdir(parents=True)
+        py_file = subdir / "test.py"
+        py_file.write_text("x = 1  # type: ignore\n")
+        pattern = str(tmp_path / "**" / "*.py")
+        exit_code = run_main_with_args(["--linters", "mypy", pattern])
+        assert exit_code == 1
+
+    def test_question_mark_glob_pattern(self, tmp_path: Path) -> None:
+        """Question mark glob pattern works."""
+        py_file = tmp_path / "a.py"
+        py_file.write_text("x = 1  # type: ignore\n")
+        pattern = str(tmp_path / "?.py")
+        exit_code = run_main_with_args(["--linters", "mypy", pattern])
+        assert exit_code == 1
+
+    def test_bracket_glob_pattern(self, tmp_path: Path) -> None:
+        """Bracket glob pattern works."""
+        py_file = tmp_path / "a.py"
+        py_file.write_text("x = 1  # type: ignore\n")
+        pattern = str(tmp_path / "[abc].py")
+        exit_code = run_main_with_args(["--linters", "mypy", pattern])
+        assert exit_code == 1
