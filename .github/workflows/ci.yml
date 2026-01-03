@@ -20,15 +20,14 @@ jobs:
           directories: .
           linters: mypy,pylint,yamllint
           verbose: true
-      # TODO: Uncomment after publishing to PyPI and updating @latest
-      # - continue-on-error: true
-      #   id: no_inline_disables
-      #   name: assert-no-inline-lint-disables
-      #   uses: 10U-Labs-LLC/assert-no-inline-lint-disables@latest
-      #   with:
-      #     files: "**/*.py **/*.yml"
-      #     linters: mypy,pylint,yamllint
-      #     verbose: true
+      - continue-on-error: true
+        id: no_inline_disables
+        name: assert-no-inline-lint-disables
+        uses: 10U-Labs-LLC/assert-no-inline-lint-disables@latest
+        with:
+          files: "**/*.py **/*.yml"
+          linters: mypy,pylint,yamllint
+          verbose: true
       - name: Set up Node
         uses: actions/setup-node@v4
         with:
@@ -104,8 +103,8 @@ jobs:
           MARKDOWNLINT: ${{ steps.markdownlint.outcome }}
           MYPY_SRC: ${{ steps.mypy_src.outcome }}
           MYPY_TEST: ${{ steps.mypy_test.outcome }}
+          NO_INLINE_DISABLES: ${{ steps.no_inline_disables.outcome }}
           NO_LINTER_CONFIGS: ${{ steps.no_linter_configs.outcome }}
-          # NO_INLINE_DISABLES: ${{ steps.no_inline_disables.outcome }}
           PYLINT_SRC: ${{ steps.pylint_src.outcome }}
           PYLINT_TEST: ${{ steps.pylint_test.outcome }}
           UNIT_TESTS: ${{ steps.unit_tests.outcome }}
@@ -125,10 +124,10 @@ jobs:
           [ "$INTEGRATION_TESTS" = "failure" ] && \
             failed="$failed integration_tests"
           [ "$E2E_TESTS" = "failure" ] && failed="$failed e2e_tests"
+          [ "$NO_INLINE_DISABLES" = "failure" ] && \
+            failed="$failed no_inline_disables"
           [ "$NO_LINTER_CONFIGS" = "failure" ] && \
             failed="$failed no_linter_configs"
-          # [ "$NO_INLINE_DISABLES" = "failure" ] && \
-          #   failed="$failed no_inline_disables"
           if [ -n "$failed" ]; then
             echo "Steps that failed:$failed"
             exit 1
