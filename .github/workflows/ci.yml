@@ -28,6 +28,13 @@ jobs:
           files: "**/*.py **/*.yml **/*.toml"
           tools: coverage,mypy,pylint,yamllint
           verbose: true
+      - continue-on-error: true
+        id: one_assert_per_pytest
+        name: assert-one-assert-per-pytest
+        uses: 10U-Labs-LLC/assert-one-assert-per-pytest@latest
+        with:
+          files: "test/**/*.py"
+          verbose: true
       - name: Set up Node
         uses: actions/setup-node@v4
         with:
@@ -106,6 +113,7 @@ jobs:
           MYPY_TEST: ${{ steps.mypy_test.outcome }}
           NO_INLINE_DIRECTIVES: ${{ steps.no_inline_directives.outcome }}
           NO_LINTER_CONFIGS: ${{ steps.no_linter_configs.outcome }}
+          ONE_ASSERT_PER_PYTEST: ${{ steps.one_assert_per_pytest.outcome }}
           PYLINT_SRC: ${{ steps.pylint_src.outcome }}
           PYLINT_TEST: ${{ steps.pylint_test.outcome }}
           UNIT_TESTS: ${{ steps.unit_tests.outcome }}
@@ -129,6 +137,8 @@ jobs:
             failed="$failed no_inline_directives"
           [ "$NO_LINTER_CONFIGS" = "failure" ] && \
             failed="$failed no_linter_configs"
+          [ "$ONE_ASSERT_PER_PYTEST" = "failure" ] && \
+            failed="$failed one_assert_per_pytest"
           if [ -n "$failed" ]; then
             echo "Steps that failed:$failed"
             exit 1
