@@ -10,13 +10,13 @@ import pytest
 def run_main_module(file_path: Path) -> int:
     """Run __main__ with given file and return exit code."""
     orig_argv = sys.argv
-    sys.argv = ["prog", "--linters", "pylint", str(file_path)]
+    sys.argv = ["prog", "--tools", "pylint", str(file_path)]
     try:
         with pytest.raises(SystemExit) as exc_info:
-            if "assert_no_inline_lint_disables.__main__" in sys.modules:
-                importlib.reload(sys.modules["assert_no_inline_lint_disables.__main__"])
+            if "assert_no_inline_directives.__main__" in sys.modules:
+                importlib.reload(sys.modules["assert_no_inline_directives.__main__"])
             else:
-                importlib.import_module("assert_no_inline_lint_disables.__main__")
+                importlib.import_module("assert_no_inline_directives.__main__")
         return exc_info.value.code if isinstance(exc_info.value.code, int) else 1
     finally:
         sys.argv = orig_argv

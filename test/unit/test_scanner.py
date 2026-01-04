@@ -2,18 +2,18 @@
 
 import pytest
 
-from assert_no_inline_lint_disables.scanner import (
+from assert_no_inline_directives.scanner import (
     Finding,
-    VALID_LINTERS,
-    get_linters_for_extension,
+    VALID_TOOLS,
+    get_tools_for_extension,
     get_relevant_extensions,
-    parse_linters,
+    parse_tools,
     scan_file,
     scan_line,
 )
 
-# Shorthand for all linters
-ALL = VALID_LINTERS
+# Shorthand for all tools
+ALL = VALID_TOOLS
 
 
 @pytest.mark.unit
@@ -153,6 +153,35 @@ class TestScanLineMypy:
 
 
 @pytest.mark.unit
+class TestScanLineCoverage:
+    """Tests for coverage directive detection."""
+
+    def test_pragma_no_cover(self) -> None:
+        """Detects pragma: no cover directive."""
+        result = scan_line("if DEBUG:  # pragma: no cover", ALL)
+        assert result == [("coverage", "pragma: no cover")]
+
+    def test_pragma_no_branch(self) -> None:
+        """Detects pragma: no branch directive."""
+        result = scan_line("if condition:  # pragma: no branch", ALL)
+        assert result == [("coverage", "pragma: no branch")]
+
+    def test_pragma_no_cover_case_insensitive(self) -> None:
+        """Pragma detection is case-insensitive."""
+        result = scan_line("x = 1  # PRAGMA: NO COVER", ALL)
+        assert result == [("coverage", "pragma: no cover")]
+
+    def test_pragma_no_cover_extra_whitespace(self) -> None:
+        """Tolerates extra whitespace in pragma directive."""
+        result = scan_line("x = 1  # pragma:   no   cover", ALL)
+        assert result == [("coverage", "pragma: no cover")]
+
+    def test_pragma_in_string_not_detected(self) -> None:
+        """Pragma directive in string literal is not detected."""
+        assert not scan_line('s = "# pragma: no cover"', ALL)
+
+
+@pytest.mark.unit
 class TestScanLineCaseInsensitivity:
     """Tests for case-insensitive matching."""
 
@@ -197,14 +226,14 @@ class TestScanLineMultiple:
     """Tests for multiple directives."""
 
     def test_multiple_directives_same_line(self) -> None:
-        """Detects multiple different linter directives on same line."""
+        """Detects multiple different tool directives on same line."""
         result = scan_line("# pylint: disable=foo  # type: ignore", ALL)
         assert len(result) == 2
         assert ("pylint", "pylint: disable") in result
         assert ("mypy", "type: ignore") in result
 
-    def test_multiple_same_linter_directives(self) -> None:
-        """Only reports one finding per linter per line."""
+    def test_multiple_same_tool_directives(self) -> None:
+        """Only reports one finding per tool per line."""
         result = scan_line("# pylint: disable=foo pylint: disable-next=bar", ALL)
         assert result == [("pylint", "pylint: disable-next")]
 
@@ -215,17 +244,17 @@ class TestScanLineMultiple:
 
 
 @pytest.mark.unit
-class TestScanLineLinterFiltering:
-    """Tests for linter filtering in scan_line."""
+class TestScanLineToolFiltering:
+    """Tests for tool filtering in scan_line."""
 
-    def test_filter_single_linter(self) -> None:
-        """Only detects specified linter."""
+    def test_filter_single_tool(self) -> None:
+        """Only detects specified tool."""
         line = "# pylint: disable=foo  # type: ignore"
         result = scan_line(line, frozenset({"pylint"}))
         assert result == [("pylint", "pylint: disable")]
 
-    def test_filter_multiple_linters(self) -> None:
-        """Detects multiple specified linters."""
+    def test_filter_multiple_tools(self) -> None:
+        """Detects multiple specified tools."""
         line = "# pylint: disable=foo  # type: ignore  # yamllint disable"
         result = scan_line(line, frozenset({"pylint", "mypy"}))
         assert len(result) == 2
@@ -234,16 +263,22 @@ class TestScanLineLinterFiltering:
         assert ("yamllint", "yamllint disable") not in result
 
     def test_filter_no_match(self) -> None:
-        """Returns empty when filtered linter not present."""
+        """Returns empty when filtered tool not present."""
         line = "# pylint: disable=foo"
         result = scan_line(line, frozenset({"mypy"}))
         assert not result
 
-    def test_all_linters_checks_all(self) -> None:
-        """ALL linters parameter checks all linters."""
+    def test_all_tools_checks_all(self) -> None:
+        """ALL tools parameter checks all tools."""
         line = "# pylint: disable=foo  # type: ignore"
         result = scan_line(line, ALL)
         assert len(result) == 2
+
+    def test_filter_coverage_only(self) -> None:
+        """Only detects coverage when specified."""
+        line = "# pragma: no cover  # pylint: disable=foo"
+        result = scan_line(line, frozenset({"coverage"}))
+        assert result == [("coverage", "pragma: no cover")]
 
 
 @pytest.mark.unit
@@ -267,7 +302,7 @@ class TestScanFile:
         assert findings[0] == Finding(
             path="test.py",
             line_number=1,
-            linter="mypy",
+            tool="mypy",
             directive="type: ignore",
         )
 
@@ -281,9 +316,9 @@ class TestScanFile:
         findings = scan_file("test.py", content, ALL, [])
         assert len(findings) == 2
         assert findings[0].line_number == 1
-        assert findings[0].linter == "pylint"
+        assert findings[0].tool == "pylint"
         assert findings[1].line_number == 3
-        assert findings[1].linter == "mypy"
+        assert findings[1].tool == "mypy"
 
     def test_multiple_findings_same_line(self) -> None:
         """File with multiple directives on same line returns all."""
@@ -296,28 +331,43 @@ class TestScanFile:
         finding = Finding(
             path="src/foo.py",
             line_number=42,
-            linter="pylint",
+            tool="pylint",
             directive="pylint: disable",
         )
         assert str(finding) == "src/foo.py:42:pylint:pylint: disable"
 
+    def test_coverage_finding(self) -> None:
+        """File with coverage directive returns finding."""
+        content = "if DEBUG:  # pragma: no cover\n    pass\n"
+        findings = scan_file("test.py", content, ALL, [])
+        assert len(findings) == 1
+        assert findings[0].tool == "coverage"
+        assert findings[0].directive == "pragma: no cover"
+
 
 @pytest.mark.unit
-class TestScanFileLinterFiltering:
-    """Tests for linter filtering in scan_file."""
+class TestScanFileToolFiltering:
+    """Tests for tool filtering in scan_file."""
 
-    def test_filter_single_linter(self) -> None:
-        """Only detects specified linter in file."""
+    def test_filter_single_tool(self) -> None:
+        """Only detects specified tool in file."""
         content = "# pylint: disable=foo\nx = 1  # type: ignore\n"
         findings = scan_file("test.py", content, frozenset({"mypy"}), [])
         assert len(findings) == 1
-        assert findings[0].linter == "mypy"
+        assert findings[0].tool == "mypy"
 
-    def test_filter_excludes_other_linters(self) -> None:
-        """Excludes unspecified linters."""
+    def test_filter_excludes_other_tools(self) -> None:
+        """Excludes unspecified tools."""
         content = "# pylint: disable=foo\n# yamllint disable\n"
         findings = scan_file("test.py", content, frozenset({"mypy"}), [])
         assert not findings
+
+    def test_filter_coverage(self) -> None:
+        """Filter to only coverage directives."""
+        content = "# pragma: no cover\n# pylint: disable=foo\n"
+        findings = scan_file("test.py", content, frozenset({"coverage"}), [])
+        assert len(findings) == 1
+        assert findings[0].tool == "coverage"
 
 
 @pytest.mark.unit
@@ -385,48 +435,48 @@ class TestEnableDirectivesNotDetected:
 
 
 @pytest.mark.unit
-class TestParseLinters:
-    """Tests for parse_linters function."""
+class TestParseTools:
+    """Tests for parse_tools function."""
 
-    def test_single_linter(self) -> None:
-        """Parses single linter."""
-        result = parse_linters("pylint")
+    def test_single_tool(self) -> None:
+        """Parses single tool."""
+        result = parse_tools("pylint")
         assert result == frozenset({"pylint"})
 
-    def test_multiple_linters(self) -> None:
-        """Parses multiple comma-separated linters."""
-        result = parse_linters("pylint,mypy")
+    def test_multiple_tools(self) -> None:
+        """Parses multiple comma-separated tools."""
+        result = parse_tools("pylint,mypy")
         assert result == frozenset({"pylint", "mypy"})
 
-    def test_all_linters(self) -> None:
-        """Parses all three linters."""
-        result = parse_linters("yamllint,pylint,mypy")
-        assert result == frozenset({"yamllint", "pylint", "mypy"})
+    def test_all_tools(self) -> None:
+        """Parses all four tools."""
+        result = parse_tools("yamllint,pylint,mypy,coverage")
+        assert result == frozenset({"yamllint", "pylint", "mypy", "coverage"})
 
     def test_whitespace_tolerance(self) -> None:
-        """Tolerates whitespace around linter names."""
-        result = parse_linters("pylint , mypy")
+        """Tolerates whitespace around tool names."""
+        result = parse_tools("pylint , mypy")
         assert result == frozenset({"pylint", "mypy"})
 
-    def test_invalid_linter_raises(self) -> None:
-        """Raises ValueError for invalid linter name."""
-        with pytest.raises(ValueError, match="Invalid linter"):
-            parse_linters("eslint")
+    def test_invalid_tool_raises(self) -> None:
+        """Raises ValueError for invalid tool name."""
+        with pytest.raises(ValueError, match="Invalid tool"):
+            parse_tools("eslint")
 
     def test_mixed_valid_invalid_raises(self) -> None:
-        """Raises ValueError when any linter is invalid."""
-        with pytest.raises(ValueError, match="Invalid linter"):
-            parse_linters("pylint,eslint")
+        """Raises ValueError when any tool is invalid."""
+        with pytest.raises(ValueError, match="Invalid tool"):
+            parse_tools("pylint,eslint")
 
     def test_empty_string_raises(self) -> None:
         """Raises ValueError for empty string."""
-        with pytest.raises(ValueError, match="At least one linter"):
-            parse_linters("")
+        with pytest.raises(ValueError, match="At least one tool"):
+            parse_tools("")
 
     def test_only_commas_raises(self) -> None:
         """Raises ValueError for string with only commas."""
-        with pytest.raises(ValueError, match="At least one linter"):
-            parse_linters(",,,")
+        with pytest.raises(ValueError, match="At least one tool"):
+            parse_tools(",,,")
 
 
 @pytest.mark.unit
@@ -448,52 +498,57 @@ class TestGetRelevantExtensions:
         result = get_relevant_extensions(frozenset({"yamllint"}))
         assert result == frozenset({".yaml", ".yml", ".toml"})
 
-    def test_combined_python_linters(self) -> None:
+    def test_coverage_extensions(self) -> None:
+        """Coverage returns .py and .toml extensions."""
+        result = get_relevant_extensions(frozenset({"coverage"}))
+        assert result == frozenset({".py", ".toml"})
+
+    def test_combined_python_tools(self) -> None:
         """Pylint and mypy together return .py and .toml extensions."""
         result = get_relevant_extensions(frozenset({"pylint", "mypy"}))
         assert result == frozenset({".py", ".toml"})
 
-    def test_all_linters(self) -> None:
-        """All linters return all extensions."""
-        result = get_relevant_extensions(frozenset({"yamllint", "pylint", "mypy"}))
+    def test_all_tools(self) -> None:
+        """All tools return all extensions."""
+        result = get_relevant_extensions(frozenset({"yamllint", "pylint", "mypy", "coverage"}))
         assert result == frozenset({".py", ".yaml", ".yml", ".toml"})
 
-    def test_empty_linters(self) -> None:
-        """Empty linters set returns empty extensions."""
+    def test_empty_tools(self) -> None:
+        """Empty tools set returns empty extensions."""
         result = get_relevant_extensions(frozenset())
         assert result == frozenset()
 
 
 @pytest.mark.unit
-class TestGetLintersForExtension:
-    """Tests for get_linters_for_extension function."""
+class TestGetToolsForExtension:
+    """Tests for get_tools_for_extension function."""
 
-    def test_py_extension_returns_python_linters(self) -> None:
-        """Python file extension returns pylint and mypy."""
-        result = get_linters_for_extension(".py", ALL)
-        assert result == frozenset({"pylint", "mypy"})
+    def test_py_extension_returns_python_tools(self) -> None:
+        """Python file extension returns pylint, mypy, and coverage."""
+        result = get_tools_for_extension(".py", ALL)
+        assert result == frozenset({"pylint", "mypy", "coverage"})
 
     def test_yaml_extension_returns_yamllint(self) -> None:
         """YAML file extension returns yamllint."""
-        result = get_linters_for_extension(".yaml", ALL)
+        result = get_tools_for_extension(".yaml", ALL)
         assert result == frozenset({"yamllint"})
 
     def test_yml_extension_returns_yamllint(self) -> None:
         """YML file extension returns yamllint."""
-        result = get_linters_for_extension(".yml", ALL)
+        result = get_tools_for_extension(".yml", ALL)
         assert result == frozenset({"yamllint"})
 
-    def test_filters_by_requested_linters(self) -> None:
-        """Only returns linters that were requested."""
-        result = get_linters_for_extension(".py", frozenset({"pylint"}))
+    def test_filters_by_requested_tools(self) -> None:
+        """Only returns tools that were requested."""
+        result = get_tools_for_extension(".py", frozenset({"pylint"}))
         assert result == frozenset({"pylint"})
 
     def test_unknown_extension_returns_empty(self) -> None:
         """Unknown extension returns empty set."""
-        result = get_linters_for_extension(".txt", ALL)
+        result = get_tools_for_extension(".txt", ALL)
         assert result == frozenset()
 
     def test_case_insensitive_extension(self) -> None:
         """Extension matching is case insensitive."""
-        result = get_linters_for_extension(".PY", ALL)
-        assert result == frozenset({"pylint", "mypy"})
+        result = get_tools_for_extension(".PY", ALL)
+        assert result == frozenset({"pylint", "mypy", "coverage"})

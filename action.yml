@@ -1,5 +1,5 @@
 ---
-description: Assert files contain no inline lint-disable directives
+description: Assert files contain no inline directives
 inputs:
   allow:
     description: Allow directive pattern (space-separated)
@@ -18,28 +18,28 @@ inputs:
   files:
     description: Target files to check (space-separated)
     required: true
-  linters:
-    description: Comma-separated list of linters (yamllint,pylint,mypy)
-    required: true
   quiet:
     default: "false"
     description: Suppress output, exit code only
     required: false
+  tools:
+    description: Comma-separated list of tools (coverage,mypy,pylint,yamllint)
+    required: true
   verbose:
     default: "false"
-    description: Show linters, files scanned/skipped, findings, and summary
+    description: Show tools, files scanned/skipped, findings, and summary
     required: false
   warn-only:
     default: "false"
     description: Always exit 0, report only
     required: false
-name: Assert No Inline Lint Disables
+name: Assert No Inline Directives
 runs:
   steps:
-    - run: python3 -m pip install assert-no-inline-lint-disables
+    - run: python3 -m pip install assert-no-inline-directives
       shell: bash
     - run: |
-        ARGS="--linters ${{ inputs.linters }}"
+        ARGS="--tools ${{ inputs.tools }}"
         [ "${{ inputs.quiet }}" = "true" ] && ARGS="$ARGS --quiet"
         [ "${{ inputs.count }}" = "true" ] && ARGS="$ARGS --count"
         [ "${{ inputs.verbose }}" = "true" ] && ARGS="$ARGS --verbose"
@@ -59,6 +59,6 @@ runs:
           FILES="$FILES '$pattern'"
         done
         set +f
-        eval "assert-no-inline-lint-disables $ARGS $FILES"
+        eval "assert-no-inline-directives $ARGS $FILES"
       shell: bash
   using: composite

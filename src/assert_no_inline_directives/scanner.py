@@ -1,35 +1,36 @@
-"""Core scanner logic for detecting inline lint-disable directives."""
+"""Core scanner logic for detecting inline directives."""
 
 import re
 from dataclasses import dataclass
 
 
-VALID_LINTERS = frozenset({"yamllint", "pylint", "mypy"})
+VALID_TOOLS = frozenset({"yamllint", "pylint", "mypy", "coverage"})
 
-# File extensions relevant to each linter
-# .toml included for all linters to catch directives in pyproject.toml comments
-LINTER_EXTENSIONS: dict[str, frozenset[str]] = {
+# File extensions relevant to each tool
+# .toml included for all tools to catch directives in pyproject.toml comments
+TOOL_EXTENSIONS: dict[str, frozenset[str]] = {
     "yamllint": frozenset({".yaml", ".yml", ".toml"}),
     "pylint": frozenset({".py", ".toml"}),
     "mypy": frozenset({".py", ".toml"}),
+    "coverage": frozenset({".py", ".toml"}),
 }
 
 
 @dataclass(frozen=True)
 class Finding:
-    """Represents a single finding of an inline lint-disable directive."""
+    """Represents a single finding of an inline directive."""
 
     path: str
     line_number: int
-    linter: str
+    tool: str
     directive: str
 
     def __str__(self) -> str:
-        """Format finding as path:line:linter:directive."""
-        return f"{self.path}:{self.line_number}:{self.linter}:{self.directive}"
+        """Format finding as path:line:tool:directive."""
+        return f"{self.path}:{self.line_number}:{self.tool}:{self.directive}"
 
 
-# Patterns for detecting inline lint-disable directives (suppressions only).
+# Patterns for detecting inline directives.
 # Uses \\s* to tolerate extra whitespace. All patterns are case-insensitive.
 # Note: These patterns are applied only to the comment portion of a line
 # (after the first # that is not inside a string literal).
@@ -52,10 +53,16 @@ MYPY_PATTERNS: list[tuple[re.Pattern[str], str]] = [
     (re.compile(r"mypy:\s*ignore-errors", re.IGNORECASE), "mypy: ignore-errors"),
 ]
 
-LINTER_PATTERNS: dict[str, list[tuple[re.Pattern[str], str]]] = {
+COVERAGE_PATTERNS: list[tuple[re.Pattern[str], str]] = [
+    (re.compile(r"pragma:\s*no\s*cover", re.IGNORECASE), "pragma: no cover"),
+    (re.compile(r"pragma:\s*no\s*branch", re.IGNORECASE), "pragma: no branch"),
+]
+
+TOOL_PATTERNS: dict[str, list[tuple[re.Pattern[str], str]]] = {
     "yamllint": YAMLLINT_PATTERNS,
     "pylint": PYLINT_PATTERNS,
     "mypy": MYPY_PATTERNS,
+    "coverage": COVERAGE_PATTERNS,
 }
 
 
@@ -102,9 +109,9 @@ def _get_comment_portion(
 
 def scan_line(
     line: str,
-    linters: frozenset[str],
+    tools: frozenset[str],
 ) -> list[tuple[str, str]]:
-    """Scan a single line for inline lint-disable directives.
+    """Scan a single line for inline directives.
 
     Only searches the comment portion of the line (after # not in a string).
     Note: This function does not handle multiline strings. Use scan_file
@@ -112,39 +119,39 @@ def scan_line(
 
     Args:
         line: The line of text to scan.
-        linters: Set of linters to check.
+        tools: Set of tools to check.
 
     Returns:
-        A list of (linter, directive) tuples for each finding.
+        A list of (tool, directive) tuples for each finding.
     """
     comment, _ = _get_comment_portion(line, None)
     if comment is None:
         return []
 
     findings: list[tuple[str, str]] = []
-    for linter in linters:
-        patterns = LINTER_PATTERNS.get(linter, [])
+    for tool in tools:
+        patterns = TOOL_PATTERNS.get(tool, [])
         for pattern, directive in patterns:
             if pattern.search(comment):
-                findings.append((linter, directive))
-                break  # Only report one finding per linter per line
+                findings.append((tool, directive))
+                break  # Only report one finding per tool per line
     return findings
 
 
 def scan_file(
     path: str,
     content: str,
-    linters: frozenset[str],
+    tools: frozenset[str],
     allow_patterns: list[str] | None = None,
 ) -> list[Finding]:
-    """Scan file content for inline lint-disable directives.
+    """Scan file content for inline directives.
 
     Properly handles multiline strings by tracking string state across lines.
 
     Args:
         path: The file path (used for reporting).
         content: The file content to scan.
-        linters: Set of linters to check.
+        tools: Set of tools to check.
         allow_patterns: List of patterns to allow (skip matching directives).
 
     Returns:
@@ -162,14 +169,14 @@ def scan_file(
 
         # Find all matching directives in this line's comment
         line_findings: list[tuple[str, str]] = []
-        for linter in linters:
-            patterns = LINTER_PATTERNS.get(linter, [])
+        for tool in tools:
+            patterns = TOOL_PATTERNS.get(tool, [])
             for pattern, directive in patterns:
                 if pattern.search(comment):
-                    line_findings.append((linter, directive))
-                    break  # Only one finding per linter per line
+                    line_findings.append((tool, directive))
+                    break  # Only one finding per tool per line
 
-        for linter, directive in line_findings:
+        for tool, directive in line_findings:
             # Check if this directive matches any allow pattern
             is_allowed = any(
                 allow_pat.lower() in line.lower()
@@ -179,70 +186,70 @@ def scan_file(
                 findings.append(Finding(
                     path=path,
                     line_number=line_number,
-                    linter=linter,
+                    tool=tool,
                     directive=directive,
                 ))
     return findings
 
 
-def parse_linters(linters_str: str) -> frozenset[str]:
-    """Parse comma-separated linters string and validate.
+def parse_tools(tools_str: str) -> frozenset[str]:
+    """Parse comma-separated tools string and validate.
 
     Args:
-        linters_str: Comma-separated list of linter names.
+        tools_str: Comma-separated list of tool names.
 
     Returns:
-        Frozenset of valid linter names.
+        Frozenset of valid tool names.
 
     Raises:
-        ValueError: If any linter name is invalid.
+        ValueError: If any tool name is invalid.
     """
-    linters = frozenset(l.strip() for l in linters_str.split(",") if l.strip())
+    tools = frozenset(t.strip() for t in tools_str.split(",") if t.strip())
 
-    invalid = linters - VALID_LINTERS
+    invalid = tools - VALID_TOOLS
     if invalid:
-        valid_list = ", ".join(sorted(VALID_LINTERS))
+        valid_list = ", ".join(sorted(VALID_TOOLS))
         invalid_list = ", ".join(sorted(invalid))
         raise ValueError(
-            f"Invalid linter(s): {invalid_list}. Valid options: {valid_list}"
+            f"Invalid tool(s): {invalid_list}. Valid options: {valid_list}"
         )
 
-    if not linters:
-        raise ValueError("At least one linter must be specified")
+    if not tools:
+        raise ValueError("At least one tool must be specified")
 
-    return linters
+    return tools
 
 
-def get_relevant_extensions(linters: frozenset[str]) -> frozenset[str]:
-    """Get file extensions relevant to the specified linters.
+def get_relevant_extensions(tools: frozenset[str]) -> frozenset[str]:
+    """Get file extensions relevant to the specified tools.
 
     Args:
-        linters: Set of linter names.
+        tools: Set of tool names.
 
     Returns:
         Frozenset of file extensions (including the dot, e.g., ".py").
     """
     extensions: set[str] = set()
-    for linter in linters:
-        extensions.update(LINTER_EXTENSIONS.get(linter, set()))
+    for tool in tools:
+        extensions.update(TOOL_EXTENSIONS.get(tool, set()))
     return frozenset(extensions)
 
 
-def get_linters_for_extension(
+def get_tools_for_extension(
     extension: str,
-    linters: frozenset[str],
+    tools: frozenset[str],
 ) -> frozenset[str]:
-    """Get linters that apply to a specific file extension.
+    """Get tools that apply to a specific file extension.
 
     Args:
         extension: File extension (including the dot, e.g., ".py").
-        linters: Set of linter names to filter.
+        tools: Set of tool names to filter.
 
     Returns:
-        Frozenset of linters that apply to this extension.
+        Frozenset of tools that apply to this extension.
     """
     ext_lower = extension.lower()
     return frozenset(
-        linter for linter in linters
-        if ext_lower in LINTER_EXTENSIONS.get(linter, frozenset())
+        tool for tool in tools
+        if ext_lower in TOOL_EXTENSIONS.get(tool, frozenset())
     )

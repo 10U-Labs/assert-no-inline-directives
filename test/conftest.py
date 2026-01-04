@@ -4,7 +4,7 @@ from unittest.mock import patch
 
 import pytest
 
-from assert_no_inline_lint_disables.cli import main
+from assert_no_inline_directives.cli import main
 
 
 def pytest_configure(config: pytest.Config) -> None:
@@ -19,7 +19,7 @@ def run_main_with_args(args: list[str]) -> int:
 
     Shared utility for CLI tests across unit, integration, and e2e test suites.
     """
-    with patch("sys.argv", ["assert-no-inline-lint-disables", *args]):
+    with patch("sys.argv", ["assert-no-inline-directives", *args]):
         try:
             main()
             return 0

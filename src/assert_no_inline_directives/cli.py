@@ -1,4 +1,4 @@
-"""Command-line interface for assert-no-inline-lint-disables."""
+"""Command-line interface for assert-no-inline-directives."""
 
 import argparse
 import fnmatch
@@ -7,11 +7,11 @@ import os
 import sys
 from dataclasses import dataclass, field
 
-from assert_no_inline_lint_disables.scanner import (
+from assert_no_inline_directives.scanner import (
     Finding,
-    get_linters_for_extension,
+    get_tools_for_extension,
     get_relevant_extensions,
-    parse_linters,
+    parse_tools,
     scan_file,
 )
 
@@ -23,8 +23,8 @@ EXIT_ERROR = 2
 def create_parser() -> argparse.ArgumentParser:
     """Create and configure the argument parser."""
     parser = argparse.ArgumentParser(
-        prog="assert-no-inline-lint-disables",
-        description="Assert that files contain no inline lint-disable directives.",
+        prog="assert-no-inline-directives",
+        description="Assert that files contain no inline directives.",
     )
     parser.add_argument(
         "files",
@@ -33,10 +33,10 @@ def create_parser() -> argparse.ArgumentParser:
         help="One or more file paths to scan.",
     )
     parser.add_argument(
-        "--linters",
+        "--tools",
         required=True,
-        metavar="LINTERS",
-        help="Comma-separated linters to check: yamllint,pylint,mypy",
+        metavar="TOOLS",
+        help="Comma-separated tools to check: coverage,mypy,pylint,yamllint",
     )
     parser.add_argument(
         "--exclude",
@@ -60,7 +60,7 @@ def create_parser() -> argparse.ArgumentParser:
         "-v",
         "--verbose",
         action="store_true",
-        help="Show linters, files scanned/skipped, findings, and summary.",
+        help="Show tools, files scanned/skipped, findings, and summary.",
     )
 
     # Behavior modifiers (mutually exclusive)
@@ -195,14 +195,14 @@ class _ScanResult:
 
 def _scan_single_file(
     path: str,
-    linters: frozenset[str],
+    tools: frozenset[str],
     allow_patterns: list[str] | None,
     result: _ScanResult,
 ) -> list[Finding] | None:
     """Scan a single file and update result. Returns findings or None on error."""
-    # Filter linters to only those relevant to this file's extension
+    # Filter tools to only those relevant to this file's extension
     _, ext = os.path.splitext(path)
-    file_linters = get_linters_for_extension(ext, linters)
+    file_tools = get_tools_for_extension(ext, tools)
 
     try:
         with open(path, encoding="utf-8") as f:
@@ -211,18 +211,18 @@ def _scan_single_file(
         print(f"Error reading {path}: {e}", file=sys.stderr)
         result.had_error = True
         return None
-    return scan_file(path, content, file_linters, allow_patterns)
+    return scan_file(path, content, file_tools, allow_patterns)
 
 
 def _process_files(
     args: argparse.Namespace,
-    linters: frozenset[str],
+    tools: frozenset[str],
     exclude_patterns: list[str],
     allow_patterns: list[str] | None,
 ) -> _ScanResult:
     """Process files and return scan result."""
     result = _ScanResult()
-    relevant_extensions = get_relevant_extensions(linters)
+    relevant_extensions = get_relevant_extensions(tools)
 
     # Expand directories to files
     all_files, missing_paths = _iter_files(args.files)
@@ -243,7 +243,7 @@ def _process_files(
             print(f"Scanning: {path}")
         result.files_scanned += 1
 
-        findings = _scan_single_file(path, linters, allow_patterns, result)
+        findings = _scan_single_file(path, tools, allow_patterns, result)
         if findings is None:
             continue
 
@@ -270,18 +270,18 @@ def main() -> None:
     args = parser.parse_args()
 
     try:
-        linters = parse_linters(args.linters)
+        tools = parse_tools(args.tools)
     except ValueError as e:
         print(f"Error: {e}", file=sys.stderr)
         sys.exit(EXIT_ERROR)
 
     if args.verbose:
-        print(f"Checking for: {', '.join(sorted(linters))}")
+        print(f"Checking for: {', '.join(sorted(tools))}")
 
     exclude_patterns = parse_patterns(args.exclude)
     allow_patterns = parse_patterns(args.allow) or None
 
-    result = _process_files(args, linters, exclude_patterns, allow_patterns)
+    result = _process_files(args, tools, exclude_patterns, allow_patterns)
 
     if args.verbose:
         print(f"Scanned {result.files_scanned} file(s), found {len(result.findings)} finding(s)")

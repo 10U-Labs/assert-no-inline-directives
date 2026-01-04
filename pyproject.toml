@@ -15,19 +15,19 @@ classifiers = [
     "Programming Language :: Python :: 3.13",
     "Topic :: Software Development :: Quality Assurance",
 ]
-description = "CLI tool to assert that files contain no inline lint-disable directives"
+description = "CLI tool to assert that files contain no inline directives"
 license = "Apache-2.0"
-name = "assert-no-inline-lint-disables"
+name = "assert-no-inline-directives"
 dynamic = ["version"]
 readme = "README.md"
 requires-python = ">=3.10"
 
 [project.scripts]
-assert-no-inline-lint-disables = "assert_no_inline_lint_disables.cli:main"
+assert-no-inline-directives = "assert_no_inline_directives.cli:main"
 
 [project.urls]
-Homepage = "https://github.com/10U-Labs-LLC/assert-no-inline-lint-disables"
-Issues = "https://github.com/10U-Labs-LLC/assert-no-inline-lint-disables/issues"
-Repository = "https://github.com/10U-Labs-LLC/assert-no-inline-lint-disables"
+Homepage = "https://github.com/10U-Labs-LLC/assert-no-inline-directives"
+Issues = "https://github.com/10U-Labs-LLC/assert-no-inline-directives/issues"
+Repository = "https://github.com/10U-Labs-LLC/assert-no-inline-directives"
 
 [tool.setuptools_scm]

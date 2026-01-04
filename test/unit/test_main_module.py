@@ -13,16 +13,16 @@ class TestMainModule:
 
     def test_main_module_runs(self) -> None:
         """__main__ module executes main()."""
-        with patch("assert_no_inline_lint_disables.cli.main") as mock_main:
+        with patch("assert_no_inline_directives.cli.main") as mock_main:
             mock_main.return_value = 0
-            if "assert_no_inline_lint_disables.__main__" in sys.modules:
-                importlib.reload(sys.modules["assert_no_inline_lint_disables.__main__"])
+            if "assert_no_inline_directives.__main__" in sys.modules:
+                importlib.reload(sys.modules["assert_no_inline_directives.__main__"])
             else:
-                importlib.import_module("assert_no_inline_lint_disables.__main__")
+                importlib.import_module("assert_no_inline_directives.__main__")
             mock_main.assert_called()
 
     def test_main_module_can_be_imported(self) -> None:
         """__main__ module exists and can be imported."""
-        with patch("assert_no_inline_lint_disables.cli.main"):
-            module = importlib.import_module("assert_no_inline_lint_disables.__main__")
+        with patch("assert_no_inline_directives.cli.main"):
+            module = importlib.import_module("assert_no_inline_directives.__main__")
             assert module is not None

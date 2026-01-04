@@ -16,36 +16,36 @@ class TestCliExitCodes:
         """Exit code 0 when no findings."""
         test_file = tmp_path / "clean.py"
         test_file.write_text("def foo():\n    return 42\n")
-        exit_code = run_main_with_args(["--linters", "pylint,mypy", str(test_file)])
+        exit_code = run_main_with_args(["--tools", "pylint,mypy", str(test_file)])
         assert exit_code == 0
 
     def test_exit_1_with_findings(self, tmp_path: Path) -> None:
         """Exit code 1 when findings exist."""
         test_file = tmp_path / "dirty.py"
         test_file.write_text("x = 1  # type: ignore\n")
-        exit_code = run_main_with_args(["--linters", "mypy", str(test_file)])
+        exit_code = run_main_with_args(["--tools", "mypy", str(test_file)])
         assert exit_code == 1
 
     def test_exit_2_file_not_found(self) -> None:
         """Exit code 2 when file does not exist."""
         exit_code = run_main_with_args([
-            "--linters", "pylint",
+            "--tools", "pylint",
             "/nonexistent/path/file.py",
         ])
         assert exit_code == 2
 
-    def test_exit_2_invalid_linter(self, tmp_path: Path) -> None:
-        """Exit code 2 when linter is invalid."""
+    def test_exit_2_invalid_tool(self, tmp_path: Path) -> None:
+        """Exit code 2 when tool is invalid."""
         test_file = tmp_path / "test.py"
         test_file.write_text("x = 1\n")
-        exit_code = run_main_with_args(["--linters", "eslint", str(test_file)])
+        exit_code = run_main_with_args(["--tools", "eslint", str(test_file)])
         assert exit_code == 2
 
-    def test_exit_2_empty_linters(self, tmp_path: Path) -> None:
-        """Exit code 2 when linters string is empty."""
+    def test_exit_2_empty_tools(self, tmp_path: Path) -> None:
+        """Exit code 2 when tools string is empty."""
         test_file = tmp_path / "test.py"
         test_file.write_text("x = 1\n")
-        exit_code = run_main_with_args(["--linters", "", str(test_file)])
+        exit_code = run_main_with_args(["--tools", "", str(test_file)])
         assert exit_code == 2
 
     def test_exit_1_overrides_exit_2(self, tmp_path: Path) -> None:
@@ -55,7 +55,7 @@ class TestCliExitCodes:
         dirty_file = tmp_path / "dirty.py"
         dirty_file.write_text("x = 1  # type: ignore\n")
         exit_code = run_main_with_args([
-            "--linters", "mypy",
+            "--tools", "mypy",
             str(good_file),
             "/nonexistent/file.py",
             str(dirty_file),
@@ -72,10 +72,10 @@ class TestCliOutput:
         tmp_path: Path,
         capsys: Any,
     ) -> None:
-        """Output format is path:line:linter:directive."""
+        """Output format is path:line:tool:directive."""
         test_file = tmp_path / "test.py"
         test_file.write_text("x = 1  # type: ignore\n")
-        run_main_with_args(["--linters", "mypy", str(test_file)])
+        run_main_with_args(["--tools", "mypy", str(test_file)])
         captured = capsys.readouterr()
         assert f"{test_file}:1:mypy:type: ignore" in captured.out
 
@@ -90,7 +90,7 @@ class TestCliOutput:
             "# pylint: disable=foo\n"
             "x = 1  # type: ignore\n"
         )
-        run_main_with_args(["--linters", "pylint,mypy", str(test_file)])
+        run_main_with_args(["--tools", "pylint,mypy", str(test_file)])
         captured = capsys.readouterr()
         lines = captured.out.strip().split("\n")
         assert len(lines) == 2
@@ -103,7 +103,7 @@ class TestCliOutput:
         """No stdout when no findings."""
         test_file = tmp_path / "clean.py"
         test_file.write_text("def foo():\n    return 42\n")
-        run_main_with_args(["--linters", "pylint,mypy", str(test_file)])
+        run_main_with_args(["--tools", "pylint,mypy", str(test_file)])
         captured = capsys.readouterr()
         assert captured.out == ""
 
@@ -119,7 +119,7 @@ class TestCliMultipleFiles:
         file1.write_text("x = 1\n")
         file2.write_text("y = 2\n")
         exit_code = run_main_with_args([
-            "--linters", "pylint,mypy",
+            "--tools", "pylint,mypy",
             str(file1),
             str(file2),
         ])
@@ -135,7 +135,7 @@ class TestCliMultipleFiles:
         file2 = tmp_path / "b.py"
         file1.write_text("x = 1  # type: ignore\n")
         file2.write_text("# pylint: disable=foo\n")
-        run_main_with_args(["--linters", "pylint,mypy", str(file1), str(file2)])
+        run_main_with_args(["--tools", "pylint,mypy", str(file1), str(file2)])
         captured = capsys.readouterr()
         lines = captured.out.strip().split("\n")
         assert len(lines) == 2
@@ -144,24 +144,24 @@ class TestCliMultipleFiles:
 
 
 @pytest.mark.integration
-class TestCliLinterFiltering:
-    """Tests for --linters flag."""
+class TestCliToolFiltering:
+    """Tests for --tools flag."""
 
-    def test_single_linter(self, tmp_path: Path, capsys: Any) -> None:
-        """Only specified linter is checked."""
+    def test_single_tool(self, tmp_path: Path, capsys: Any) -> None:
+        """Only specified tool is checked."""
         test_file = tmp_path / "test.py"
         test_file.write_text("# pylint: disable=foo\nx = 1  # type: ignore\n")
-        exit_code = run_main_with_args(["--linters", "mypy", str(test_file)])
+        exit_code = run_main_with_args(["--tools", "mypy", str(test_file)])
         assert exit_code == 1
         captured = capsys.readouterr()
         assert "mypy" in captured.out
         assert "pylint" not in captured.out
 
-    def test_multiple_linters(self, tmp_path: Path, capsys: Any) -> None:
-        """Multiple specified linters are checked."""
+    def test_multiple_tools(self, tmp_path: Path, capsys: Any) -> None:
+        """Multiple specified tools are checked."""
         test_file = tmp_path / "test.py"
         test_file.write_text("# pylint: disable=foo\nx = 1  # type: ignore\n")
-        run_main_with_args(["--linters", "pylint,mypy", str(test_file)])
+        run_main_with_args(["--tools", "pylint,mypy", str(test_file)])
         captured = capsys.readouterr()
         assert "pylint" in captured.out
         assert "mypy" in captured.out
@@ -176,7 +176,7 @@ class TestCliExclude:
         test_file = tmp_path / "test.py"
         test_file.write_text("x = 1  # type: ignore\n")
         exit_code = run_main_with_args([
-            "--linters", "mypy",
+            "--tools", "mypy",
             "--exclude", "*.py",
             str(test_file),
         ])
@@ -189,7 +189,7 @@ class TestCliExclude:
         file1.write_text("x = 1  # type: ignore\n")
         file2.write_text("y = 2  # type: ignore\n")
         run_main_with_args([
-            "--linters", "mypy",
+            "--tools", "mypy",
             "--exclude", "*vendor*",
             str(file1),
             str(file2),
@@ -208,7 +208,7 @@ class TestCliQuiet:
         test_file = tmp_path / "test.py"
         test_file.write_text("x = 1  # type: ignore\n")
         exit_code = run_main_with_args([
-            "--linters", "mypy",
+            "--tools", "mypy",
             "--quiet",
             str(test_file),
         ])
@@ -221,7 +221,7 @@ class TestCliQuiet:
         test_file = tmp_path / "clean.py"
         test_file.write_text("x = 1\n")
         exit_code = run_main_with_args([
-            "--linters", "mypy",
+            "--tools", "mypy",
             "--quiet",
             str(test_file),
         ])
@@ -236,7 +236,7 @@ class TestCliCount:
         """Count mode outputs only the count."""
         test_file = tmp_path / "test.py"
         test_file.write_text("# pylint: disable=foo\nx = 1  # type: ignore\n")
-        run_main_with_args(["--linters", "pylint,mypy", "--count", str(test_file)])
+        run_main_with_args(["--tools", "pylint,mypy", "--count", str(test_file)])
         captured = capsys.readouterr()
         assert captured.out.strip() == "2"
 
@@ -244,7 +244,7 @@ class TestCliCount:
         """Count mode outputs 0 for clean files."""
         test_file = tmp_path / "clean.py"
         test_file.write_text("x = 1\n")
-        run_main_with_args(["--linters", "mypy", "--count", str(test_file)])
+        run_main_with_args(["--tools", "mypy", "--count", str(test_file)])
         captured = capsys.readouterr()
         assert captured.out.strip() == "0"
 
@@ -258,7 +258,7 @@ class TestCliBehaviorFlags:
         test_file = tmp_path / "test.py"
         test_file.write_text("# pylint: disable=foo\nx = 1  # type: ignore\n")
         exit_code = run_main_with_args([
-            "--linters", "pylint,mypy",
+            "--tools", "pylint,mypy",
             "--fail-fast",
             str(test_file),
         ])
@@ -272,7 +272,7 @@ class TestCliBehaviorFlags:
         test_file = tmp_path / "test.py"
         test_file.write_text("x = 1  # type: ignore\n")
         exit_code = run_main_with_args([
-            "--linters", "mypy",
+            "--tools", "mypy",
             "--warn-only",
             str(test_file),
         ])
@@ -282,7 +282,7 @@ class TestCliBehaviorFlags:
         """Warn-only still outputs findings."""
         test_file = tmp_path / "test.py"
         test_file.write_text("x = 1  # type: ignore\n")
-        run_main_with_args(["--linters", "mypy", "--warn-only", str(test_file)])
+        run_main_with_args(["--tools", "mypy", "--warn-only", str(test_file)])
         captured = capsys.readouterr()
         assert "mypy" in captured.out
 
@@ -296,7 +296,7 @@ class TestCliAllow:
         test_file = tmp_path / "test.py"
         test_file.write_text("x = 1  # type: ignore[import]\n")
         exit_code = run_main_with_args([
-            "--linters", "mypy",
+            "--tools", "mypy",
             "--allow", "type: ignore[import]",
             str(test_file),
         ])
@@ -311,7 +311,7 @@ class TestCliAllow:
             "y = 2  # type: ignore\n"
         )
         run_main_with_args([
-            "--linters", "pylint,mypy",
+            "--tools", "pylint,mypy",
             "--allow", "type: ignore[import],too-many-arguments",
             str(test_file),
         ])
@@ -333,7 +333,7 @@ class TestCliExtensionFiltering:
         py_file.write_text("x = 1  # type: ignore\n")
         txt_file.write_text("x = 1  # type: ignore\n")
         exit_code = run_main_with_args([
-            "--linters", "mypy",
+            "--tools", "mypy",
             str(py_file),
             str(txt_file),
         ])
@@ -346,7 +346,7 @@ class TestCliExtensionFiltering:
         py_file.write_text("# pylint: disable=foo\n")
         yaml_file.write_text("# pylint: disable=foo\n")
         run_main_with_args([
-            "--linters", "pylint",
+            "--tools", "pylint",
             str(py_file),
             str(yaml_file),
         ])
@@ -363,7 +363,7 @@ class TestCliExtensionFiltering:
         yml_file.write_text("# yamllint disable\n")
         py_file.write_text("# yamllint disable\n")
         run_main_with_args([
-            "--linters", "yamllint",
+            "--tools", "yamllint",
             str(yaml_file),
             str(yml_file),
             str(py_file),
@@ -386,7 +386,7 @@ class TestCliExtensionFiltering:
         yaml_file.write_text("# yamllint disable\n")
         txt_file.write_text("# pylint: disable=foo\n")
         run_main_with_args([
-            "--linters", "pylint,yamllint",
+            "--tools", "pylint,yamllint",
             str(py_file),
             str(yaml_file),
             str(txt_file),
@@ -400,7 +400,7 @@ class TestCliExtensionFiltering:
         """Extension matching is case-insensitive."""
         py_file = tmp_path / "test.PY"
         py_file.write_text("x = 1  # type: ignore\n")
-        run_main_with_args(["--linters", "mypy", str(py_file)])
+        run_main_with_args(["--tools", "mypy", str(py_file)])
         captured = capsys.readouterr()
         assert "test.PY" in captured.out
 
@@ -410,7 +410,7 @@ class TestCliVerbose:
     """Tests for --verbose flag integration scenarios."""
 
     def test_verbose_full_workflow(self, tmp_path: Path, capsys: Any) -> None:
-        """Verbose shows complete workflow: linters, scans, findings, summary."""
+        """Verbose shows complete workflow: tools, scans, findings, summary."""
         # Create various files to test verbose output
         py_file = tmp_path / "code.py"
         py_file.write_text("x = 1  # type: ignore\n")
@@ -421,7 +421,7 @@ class TestCliVerbose:
         excluded = tmp_path / "generated.py"
         excluded.write_text("# pylint: disable=foo\n")
         run_main_with_args([
-            "--linters", "pylint,mypy",
+            "--tools", "pylint,mypy",
             "--verbose",
             "--exclude", "*generated.py",
             str(py_file), str(txt_file), str(subdir), str(excluded),
@@ -441,7 +441,7 @@ class TestCliVerbose:
         file2 = tmp_path / "second.py"
         file2.write_text("# pylint: disable=two\n")
         run_main_with_args([
-            "--linters", "pylint", "--verbose", "--fail-fast",
+            "--tools", "pylint", "--verbose", "--fail-fast",
             str(file1), str(file2),
         ])
         out = capsys.readouterr().out
@@ -463,7 +463,7 @@ class TestCliStringLiteralHandling:
         """Directives in single-quoted strings are not detected."""
         test_file = tmp_path / "test.py"
         test_file.write_text("s = 'type: ignore'\n")
-        exit_code = run_main_with_args(["--linters", "mypy", str(test_file)])
+        exit_code = run_main_with_args(["--tools", "mypy", str(test_file)])
         assert exit_code == 0
         captured = capsys.readouterr()
         assert captured.out == ""
@@ -476,7 +476,7 @@ class TestCliStringLiteralHandling:
         """Directives in double-quoted strings are not detected."""
         test_file = tmp_path / "test.py"
         test_file.write_text('s = "type: ignore"\n')
-        exit_code = run_main_with_args(["--linters", "mypy", str(test_file)])
+        exit_code = run_main_with_args(["--tools", "mypy", str(test_file)])
         assert exit_code == 0
         captured = capsys.readouterr()
         assert captured.out == ""
@@ -489,7 +489,7 @@ class TestCliStringLiteralHandling:
         """Directives in triple-quoted strings are not detected."""
         test_file = tmp_path / "test.py"
         test_file.write_text('s = """type: ignore"""\n')
-        exit_code = run_main_with_args(["--linters", "mypy", str(test_file)])
+        exit_code = run_main_with_args(["--tools", "mypy", str(test_file)])
         assert exit_code == 0
         captured = capsys.readouterr()
         assert captured.out == ""
@@ -502,7 +502,7 @@ class TestCliStringLiteralHandling:
         """Directives in triple single-quoted strings are not detected."""
         test_file = tmp_path / "test.py"
         test_file.write_text("s = '''type: ignore'''\n")
-        exit_code = run_main_with_args(["--linters", "mypy", str(test_file)])
+        exit_code = run_main_with_args(["--tools", "mypy", str(test_file)])
         assert exit_code == 0
         captured = capsys.readouterr()
         assert captured.out == ""
@@ -520,7 +520,7 @@ pylint: disable
 """
 '''
         test_file.write_text(content)
-        exit_code = run_main_with_args(["--linters", "mypy,pylint", str(test_file)])
+        exit_code = run_main_with_args(["--tools", "mypy,pylint", str(test_file)])
         assert exit_code == 0
         captured = capsys.readouterr()
         assert captured.out == ""
@@ -533,7 +533,7 @@ pylint: disable
         """Directives in comments after strings are detected."""
         test_file = tmp_path / "test.py"
         test_file.write_text('s = "hello"  # type: ignore\n')
-        exit_code = run_main_with_args(["--linters", "mypy", str(test_file)])
+        exit_code = run_main_with_args(["--tools", "mypy", str(test_file)])
         assert exit_code == 1
         captured = capsys.readouterr()
         assert "type: ignore" in captured.out
@@ -546,7 +546,7 @@ pylint: disable
         """Escaped quotes in strings don't break parsing."""
         test_file = tmp_path / "test.py"
         test_file.write_text(r's = "escaped \" quote"  # type: ignore' + '\n')
-        exit_code = run_main_with_args(["--linters", "mypy", str(test_file)])
+        exit_code = run_main_with_args(["--tools", "mypy", str(test_file)])
         assert exit_code == 1
         captured = capsys.readouterr()
         assert "type: ignore" in captured.out
@@ -563,7 +563,7 @@ class TestCliDirectoryHandling:
         nested_file = subdir / "test.py"
         nested_file.write_text("x = 1  # type: ignore\n")
         exit_code = run_main_with_args([
-            "--linters", "mypy",
+            "--tools", "mypy",
             str(subdir),
         ])
         assert exit_code == 1  # Finding detected in nested file
@@ -579,7 +579,7 @@ class TestCliDirectoryHandling:
         test_file = tmp_path / "test.py"
         test_file.write_text("x = 1\n")
         run_main_with_args([
-            "--linters", "mypy",
+            "--tools", "mypy",
             str(subdir),
             str(test_file),
         ])
@@ -602,7 +602,7 @@ class TestCliDirectoryHandling:
         readable.write_text("x = 1  # type: ignore\n")
         try:
             exit_code = run_main_with_args([
-                "--linters", "mypy", str(subdir)
+                "--tools", "mypy", str(subdir)
             ])
             assert exit_code == 1  # Finding in readable file
             captured = capsys.readouterr()
@@ -628,7 +628,7 @@ class TestCliGlobPatterns:
         (tmp_path / "beta.py").write_text("b = 2  # type: ignore\n")
         (tmp_path / "gamma.py").write_text("clean code\n")
         exit_code = run_main_with_args([
-            "--linters", "mypy", str(tmp_path / "*.py")
+            "--tools", "mypy", str(tmp_path / "*.py")
         ])
         assert exit_code == 1
         output = capsys.readouterr().out
@@ -646,7 +646,7 @@ class TestCliGlobPatterns:
         (subdir / "module.py").write_text("# pylint: disable=all\n")
         # Glob matches directory name, should expand and scan contents
         exit_code = run_main_with_args([
-            "--linters", "pylint", str(tmp_path / "s*")
+            "--tools", "pylint", str(tmp_path / "s*")
         ])
         assert exit_code == 1
         assert "module.py" in capsys.readouterr().out
@@ -660,7 +660,7 @@ class TestCliGlobPatterns:
         (nested / "module.py").write_text("# pylint: disable=all\n")
         (tmp_path / "root.py").write_text("# pylint: disable=all\n")
         exit_code = run_main_with_args([
-            "--linters", "pylint", str(tmp_path / "**" / "*.py")
+            "--tools", "pylint", str(tmp_path / "**" / "*.py")
         ])
         assert exit_code == 1
         output = capsys.readouterr().out
@@ -673,7 +673,7 @@ class TestCliGlobPatterns:
     ) -> None:
         """Glob pattern matching nothing reports error with pattern name."""
         exit_code = run_main_with_args([
-            "--linters", "mypy", str(tmp_path / "no_match_*.py")
+            "--tools", "mypy", str(tmp_path / "no_match_*.py")
         ])
         assert exit_code == 2
         assert "no_match_*.py" in capsys.readouterr().err

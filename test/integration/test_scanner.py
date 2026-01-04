@@ -2,7 +2,7 @@
 
 import pytest
 
-from assert_no_inline_lint_disables.scanner import scan_line
+from assert_no_inline_directives.scanner import scan_line
 
 
 @pytest.mark.integration
@@ -19,15 +19,15 @@ class TestScanLineIntegration:
         result = scan_line("x = 1  # type: ignore", frozenset({"mypy"}))
         assert result == [("mypy", "type: ignore")]
 
-    def test_scan_line_multiple_linters(self) -> None:
-        """scan_line checks all specified linters."""
+    def test_scan_line_multiple_tools(self) -> None:
+        """scan_line checks all specified tools."""
         result = scan_line(
             "# pylint: disable=foo  # type: ignore",
             frozenset({"pylint", "mypy"}),
         )
         assert len(result) == 2
-        linters = {r[0] for r in result}
-        assert linters == {"pylint", "mypy"}
+        tools = {r[0] for r in result}
+        assert tools == {"pylint", "mypy"}
 
     def test_scan_line_string_literal_not_detected(self) -> None:
         """scan_line ignores directives in string literals."""
@@ -61,7 +61,7 @@ class TestScanLineIntegration:
             assert len(result) == 1
             assert result[0][0] == "pylint"
 
-    def test_scan_line_unlisted_linter_ignored(self) -> None:
-        """scan_line only checks linters in the provided set."""
+    def test_scan_line_unlisted_tool_ignored(self) -> None:
+        """scan_line only checks tools in the provided set."""
         result = scan_line("# type: ignore", frozenset({"pylint"}))
         assert not result
