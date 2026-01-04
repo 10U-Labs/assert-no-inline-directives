@@ -225,11 +225,19 @@ class TestScanLineWhitespace:
 class TestScanLineMultiple:
     """Tests for multiple directives."""
 
-    def test_multiple_directives_same_line(self) -> None:
-        """Detects multiple different tool directives on same line."""
+    def test_multiple_directives_same_line_count(self) -> None:
+        """Detects multiple directives - returns count of 2."""
         result = scan_line("# pylint: disable=foo  # type: ignore", ALL)
         assert len(result) == 2
+
+    def test_multiple_directives_same_line_contains_pylint(self) -> None:
+        """Detects multiple directives - contains pylint."""
+        result = scan_line("# pylint: disable=foo  # type: ignore", ALL)
         assert ("pylint", "pylint: disable") in result
+
+    def test_multiple_directives_same_line_contains_mypy(self) -> None:
+        """Detects multiple directives - contains mypy."""
+        result = scan_line("# pylint: disable=foo  # type: ignore", ALL)
         assert ("mypy", "type: ignore") in result
 
     def test_multiple_same_tool_directives(self) -> None:
@@ -253,13 +261,28 @@ class TestScanLineToolFiltering:
         result = scan_line(line, frozenset({"pylint"}))
         assert result == [("pylint", "pylint: disable")]
 
-    def test_filter_multiple_tools(self) -> None:
-        """Detects multiple specified tools."""
+    def test_filter_multiple_tools_count(self) -> None:
+        """Detects multiple specified tools - returns count of 2."""
         line = "# pylint: disable=foo  # type: ignore  # yamllint disable"
         result = scan_line(line, frozenset({"pylint", "mypy"}))
         assert len(result) == 2
+
+    def test_filter_multiple_tools_contains_pylint(self) -> None:
+        """Detects multiple specified tools - contains pylint."""
+        line = "# pylint: disable=foo  # type: ignore  # yamllint disable"
+        result = scan_line(line, frozenset({"pylint", "mypy"}))
         assert ("pylint", "pylint: disable") in result
+
+    def test_filter_multiple_tools_contains_mypy(self) -> None:
+        """Detects multiple specified tools - contains mypy."""
+        line = "# pylint: disable=foo  # type: ignore  # yamllint disable"
+        result = scan_line(line, frozenset({"pylint", "mypy"}))
         assert ("mypy", "type: ignore") in result
+
+    def test_filter_multiple_tools_excludes_yamllint(self) -> None:
+        """Detects multiple specified tools - excludes yamllint."""
+        line = "# pylint: disable=foo  # type: ignore  # yamllint disable"
+        result = scan_line(line, frozenset({"pylint", "mypy"}))
         assert ("yamllint", "yamllint disable") not in result
 
     def test_filter_no_match(self) -> None:
@@ -306,8 +329,8 @@ class TestScanFile:
             directive="type: ignore",
         )
 
-    def test_multiple_findings_different_lines(self) -> None:
-        """File with directives on different lines returns all findings."""
+    def test_multiple_findings_different_lines_count(self) -> None:
+        """File with directives on different lines - returns count of 2."""
         content = (
             "# pylint: disable=foo\n"
             "x = 1\n"
@@ -315,9 +338,45 @@ class TestScanFile:
         )
         findings = scan_file("test.py", content, ALL, [])
         assert len(findings) == 2
+
+    def test_multiple_findings_different_lines_first_line(self) -> None:
+        """File with directives - first finding is on line 1."""
+        content = (
+            "# pylint: disable=foo\n"
+            "x = 1\n"
+            "y = 2  # type: ignore\n"
+        )
+        findings = scan_file("test.py", content, ALL, [])
         assert findings[0].line_number == 1
+
+    def test_multiple_findings_different_lines_first_tool(self) -> None:
+        """File with directives - first finding is pylint."""
+        content = (
+            "# pylint: disable=foo\n"
+            "x = 1\n"
+            "y = 2  # type: ignore\n"
+        )
+        findings = scan_file("test.py", content, ALL, [])
         assert findings[0].tool == "pylint"
+
+    def test_multiple_findings_different_lines_second_line(self) -> None:
+        """File with directives - second finding is on line 3."""
+        content = (
+            "# pylint: disable=foo\n"
+            "x = 1\n"
+            "y = 2  # type: ignore\n"
+        )
+        findings = scan_file("test.py", content, ALL, [])
         assert findings[1].line_number == 3
+
+    def test_multiple_findings_different_lines_second_tool(self) -> None:
+        """File with directives - second finding is mypy."""
+        content = (
+            "# pylint: disable=foo\n"
+            "x = 1\n"
+            "y = 2  # type: ignore\n"
+        )
+        findings = scan_file("test.py", content, ALL, [])
         assert findings[1].tool == "mypy"
 
     def test_multiple_findings_same_line(self) -> None:
@@ -402,8 +461,8 @@ class TestScanFileAllowPatterns:
         findings = scan_file("test.py", content, ALL, ["type: ignore[import]"])
         assert not findings
 
-    def test_multiple_allow_patterns(self) -> None:
-        """Multiple allow patterns work together."""
+    def test_multiple_allow_patterns_count(self) -> None:
+        """Multiple allow patterns - returns one finding."""
         content = (
             "# pylint: disable=too-many-arguments\n"
             "x = foo()  # type: ignore[import]\n"
@@ -416,6 +475,20 @@ class TestScanFileAllowPatterns:
             ["type: ignore[import]", "too-many-arguments"],
         )
         assert len(findings) == 1
+
+    def test_multiple_allow_patterns_line_number(self) -> None:
+        """Multiple allow patterns - remaining finding is on line 3."""
+        content = (
+            "# pylint: disable=too-many-arguments\n"
+            "x = foo()  # type: ignore[import]\n"
+            "y = bar()  # type: ignore\n"
+        )
+        findings = scan_file(
+            "test.py",
+            content,
+            ALL,
+            ["type: ignore[import]", "too-many-arguments"],
+        )
         assert findings[0].line_number == 3
 
 

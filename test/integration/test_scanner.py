@@ -19,13 +19,20 @@ class TestScanLineIntegration:
         result = scan_line("x = 1  # type: ignore", frozenset({"mypy"}))
         assert result == [("mypy", "type: ignore")]
 
-    def test_scan_line_multiple_tools(self) -> None:
-        """scan_line checks all specified tools."""
+    def test_scan_line_multiple_tools_count(self) -> None:
+        """scan_line checks all specified tools - returns correct count."""
         result = scan_line(
             "# pylint: disable=foo  # type: ignore",
             frozenset({"pylint", "mypy"}),
         )
         assert len(result) == 2
+
+    def test_scan_line_multiple_tools_contains_both(self) -> None:
+        """scan_line checks all specified tools - contains both tools."""
+        result = scan_line(
+            "# pylint: disable=foo  # type: ignore",
+            frozenset({"pylint", "mypy"}),
+        )
         tools = {r[0] for r in result}
         assert tools == {"pylint", "mypy"}
 
@@ -49,17 +56,20 @@ class TestScanLineIntegration:
         result = scan_line("# yamllint disable", frozenset({"yamllint"}))
         assert result == [("yamllint", "yamllint disable")]
 
-    def test_scan_line_pylint_variants(self) -> None:
-        """scan_line detects various pylint directive forms."""
-        lines = [
-            "# pylint: disable=foo",
-            "# pylint: disable-next=bar",
-            "# pylint: skip-file",
-        ]
-        for line in lines:
-            result = scan_line(line, frozenset({"pylint"}))
-            assert len(result) == 1
-            assert result[0][0] == "pylint"
+    def test_scan_line_pylint_disable(self) -> None:
+        """scan_line detects pylint: disable."""
+        result = scan_line("# pylint: disable=foo", frozenset({"pylint"}))
+        assert result == [("pylint", "pylint: disable")]
+
+    def test_scan_line_pylint_disable_next(self) -> None:
+        """scan_line detects pylint: disable-next."""
+        result = scan_line("# pylint: disable-next=bar", frozenset({"pylint"}))
+        assert result == [("pylint", "pylint: disable-next")]
+
+    def test_scan_line_pylint_skip_file(self) -> None:
+        """scan_line detects pylint: skip-file."""
+        result = scan_line("# pylint: skip-file", frozenset({"pylint"}))
+        assert result == [("pylint", "pylint: skip-file")]
 
     def test_scan_line_unlisted_tool_ignored(self) -> None:
         """scan_line only checks tools in the provided set."""

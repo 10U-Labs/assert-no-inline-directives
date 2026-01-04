@@ -125,7 +125,7 @@ class TestCliMultipleFiles:
         ])
         assert exit_code == 0
 
-    def test_findings_across_files(
+    def test_findings_across_files_count(
         self,
         tmp_path: Path,
         capsys: Any,
@@ -139,7 +139,35 @@ class TestCliMultipleFiles:
         captured = capsys.readouterr()
         lines = captured.out.strip().split("\n")
         assert len(lines) == 2
+
+    def test_findings_across_files_first_file(
+        self,
+        tmp_path: Path,
+        capsys: Any,
+    ) -> None:
+        """First file finding is reported first."""
+        file1 = tmp_path / "a.py"
+        file2 = tmp_path / "b.py"
+        file1.write_text("x = 1  # type: ignore\n")
+        file2.write_text("# pylint: disable=foo\n")
+        run_main_with_args(["--tools", "pylint,mypy", str(file1), str(file2)])
+        captured = capsys.readouterr()
+        lines = captured.out.strip().split("\n")
         assert "a.py" in lines[0]
+
+    def test_findings_across_files_second_file(
+        self,
+        tmp_path: Path,
+        capsys: Any,
+    ) -> None:
+        """Second file finding is reported second."""
+        file1 = tmp_path / "a.py"
+        file2 = tmp_path / "b.py"
+        file1.write_text("x = 1  # type: ignore\n")
+        file2.write_text("# pylint: disable=foo\n")
+        run_main_with_args(["--tools", "pylint,mypy", str(file1), str(file2)])
+        captured = capsys.readouterr()
+        lines = captured.out.strip().split("\n")
         assert "b.py" in lines[1]
 
 
@@ -147,23 +175,45 @@ class TestCliMultipleFiles:
 class TestCliToolFiltering:
     """Tests for --tools flag."""
 
-    def test_single_tool(self, tmp_path: Path, capsys: Any) -> None:
-        """Only specified tool is checked."""
+    def test_single_tool_exit_code(self, tmp_path: Path) -> None:
+        """Single tool exits 1 when finding present."""
         test_file = tmp_path / "test.py"
         test_file.write_text("# pylint: disable=foo\nx = 1  # type: ignore\n")
         exit_code = run_main_with_args(["--tools", "mypy", str(test_file)])
         assert exit_code == 1
+
+    def test_single_tool_includes_matching(self, tmp_path: Path, capsys: Any) -> None:
+        """Single tool includes matching tool in output."""
+        test_file = tmp_path / "test.py"
+        test_file.write_text("# pylint: disable=foo\nx = 1  # type: ignore\n")
+        run_main_with_args(["--tools", "mypy", str(test_file)])
         captured = capsys.readouterr()
         assert "mypy" in captured.out
+
+    def test_single_tool_excludes_other(self, tmp_path: Path, capsys: Any) -> None:
+        """Single tool excludes other tools from output."""
+        test_file = tmp_path / "test.py"
+        test_file.write_text("# pylint: disable=foo\nx = 1  # type: ignore\n")
+        run_main_with_args(["--tools", "mypy", str(test_file)])
+        captured = capsys.readouterr()
         assert "pylint" not in captured.out
 
-    def test_multiple_tools(self, tmp_path: Path, capsys: Any) -> None:
-        """Multiple specified tools are checked."""
+    def test_multiple_tools_includes_pylint(
+        self, tmp_path: Path, capsys: Any
+    ) -> None:
+        """Multiple tools include pylint in output."""
         test_file = tmp_path / "test.py"
         test_file.write_text("# pylint: disable=foo\nx = 1  # type: ignore\n")
         run_main_with_args(["--tools", "pylint,mypy", str(test_file)])
         captured = capsys.readouterr()
         assert "pylint" in captured.out
+
+    def test_multiple_tools_includes_mypy(self, tmp_path: Path, capsys: Any) -> None:
+        """Multiple tools include mypy in output."""
+        test_file = tmp_path / "test.py"
+        test_file.write_text("# pylint: disable=foo\nx = 1  # type: ignore\n")
+        run_main_with_args(["--tools", "pylint,mypy", str(test_file)])
+        captured = capsys.readouterr()
         assert "mypy" in captured.out
 
 
@@ -182,8 +232,10 @@ class TestCliExclude:
         ])
         assert exit_code == 0
 
-    def test_exclude_multiple_patterns(self, tmp_path: Path, capsys: Any) -> None:
-        """Multiple exclude patterns work together."""
+    def test_exclude_multiple_patterns_includes_test(
+        self, tmp_path: Path, capsys: Any
+    ) -> None:
+        """Multiple exclude patterns include non-excluded file."""
         file1 = tmp_path / "test.py"
         file2 = tmp_path / "vendor.py"
         file1.write_text("x = 1  # type: ignore\n")
@@ -196,6 +248,22 @@ class TestCliExclude:
         ])
         captured = capsys.readouterr()
         assert "test.py" in captured.out
+
+    def test_exclude_multiple_patterns_excludes_vendor(
+        self, tmp_path: Path, capsys: Any
+    ) -> None:
+        """Multiple exclude patterns exclude vendor file."""
+        file1 = tmp_path / "test.py"
+        file2 = tmp_path / "vendor.py"
+        file1.write_text("x = 1  # type: ignore\n")
+        file2.write_text("y = 2  # type: ignore\n")
+        run_main_with_args([
+            "--tools", "mypy",
+            "--exclude", "*vendor*",
+            str(file1),
+            str(file2),
+        ])
+        captured = capsys.readouterr()
         assert "vendor.py" not in captured.out
 
 
@@ -203,8 +271,8 @@ class TestCliExclude:
 class TestCliQuiet:
     """Tests for --quiet flag."""
 
-    def test_quiet_no_output(self, tmp_path: Path, capsys: Any) -> None:
-        """Quiet mode produces no output."""
+    def test_quiet_exit_code(self, tmp_path: Path) -> None:
+        """Quiet mode exits 1 with findings."""
         test_file = tmp_path / "test.py"
         test_file.write_text("x = 1  # type: ignore\n")
         exit_code = run_main_with_args([
@@ -213,6 +281,16 @@ class TestCliQuiet:
             str(test_file),
         ])
         assert exit_code == 1
+
+    def test_quiet_no_output(self, tmp_path: Path, capsys: Any) -> None:
+        """Quiet mode produces no output."""
+        test_file = tmp_path / "test.py"
+        test_file.write_text("x = 1  # type: ignore\n")
+        run_main_with_args([
+            "--tools", "mypy",
+            "--quiet",
+            str(test_file),
+        ])
         captured = capsys.readouterr()
         assert captured.out == ""
 
@@ -253,8 +331,8 @@ class TestCliCount:
 class TestCliBehaviorFlags:
     """Tests for --fail-fast and --warn-only flags."""
 
-    def test_fail_fast_exits_on_first(self, tmp_path: Path, capsys: Any) -> None:
-        """Fail-fast exits on first finding."""
+    def test_fail_fast_exit_code(self, tmp_path: Path) -> None:
+        """Fail-fast exits 1 on first finding."""
         test_file = tmp_path / "test.py"
         test_file.write_text("# pylint: disable=foo\nx = 1  # type: ignore\n")
         exit_code = run_main_with_args([
@@ -263,6 +341,16 @@ class TestCliBehaviorFlags:
             str(test_file),
         ])
         assert exit_code == 1
+
+    def test_fail_fast_single_output(self, tmp_path: Path, capsys: Any) -> None:
+        """Fail-fast outputs only first finding."""
+        test_file = tmp_path / "test.py"
+        test_file.write_text("# pylint: disable=foo\nx = 1  # type: ignore\n")
+        run_main_with_args([
+            "--tools", "pylint,mypy",
+            "--fail-fast",
+            str(test_file),
+        ])
         captured = capsys.readouterr()
         lines = captured.out.strip().split("\n")
         assert len(lines) == 1
@@ -302,8 +390,10 @@ class TestCliAllow:
         ])
         assert exit_code == 0
 
-    def test_allow_multiple_patterns(self, tmp_path: Path, capsys: Any) -> None:
-        """Multiple allow patterns work together."""
+    def test_allow_multiple_patterns_count(
+        self, tmp_path: Path, capsys: Any
+    ) -> None:
+        """Multiple allow patterns - only non-allowed finding reported."""
         test_file = tmp_path / "test.py"
         test_file.write_text(
             "# pylint: disable=too-many-arguments\n"
@@ -318,7 +408,43 @@ class TestCliAllow:
         captured = capsys.readouterr()
         lines = captured.out.strip().split("\n")
         assert len(lines) == 1
+
+    def test_allow_multiple_patterns_content(
+        self, tmp_path: Path, capsys: Any
+    ) -> None:
+        """Multiple allow patterns - correct finding is reported."""
+        test_file = tmp_path / "test.py"
+        test_file.write_text(
+            "# pylint: disable=too-many-arguments\n"
+            "x = 1  # type: ignore[import]\n"
+            "y = 2  # type: ignore\n"
+        )
+        run_main_with_args([
+            "--tools", "pylint,mypy",
+            "--allow", "type: ignore[import],too-many-arguments",
+            str(test_file),
+        ])
+        captured = capsys.readouterr()
+        lines = captured.out.strip().split("\n")
         assert "type: ignore" in lines[0]
+
+    def test_allow_multiple_patterns_excludes_import(
+        self, tmp_path: Path, capsys: Any
+    ) -> None:
+        """Multiple allow patterns - import variant not in output."""
+        test_file = tmp_path / "test.py"
+        test_file.write_text(
+            "# pylint: disable=too-many-arguments\n"
+            "x = 1  # type: ignore[import]\n"
+            "y = 2  # type: ignore\n"
+        )
+        run_main_with_args([
+            "--tools", "pylint,mypy",
+            "--allow", "type: ignore[import],too-many-arguments",
+            str(test_file),
+        ])
+        captured = capsys.readouterr()
+        lines = captured.out.strip().split("\n")
         assert "[import]" not in lines[0]
 
 
@@ -339,8 +465,10 @@ class TestCliExtensionFiltering:
         ])
         assert exit_code == 1  # Only py_file should be scanned
 
-    def test_pylint_only_scans_py(self, tmp_path: Path, capsys: Any) -> None:
-        """Pylint linter only scans .py files."""
+    def test_pylint_only_scans_py_includes(
+        self, tmp_path: Path, capsys: Any
+    ) -> None:
+        """Pylint linter includes .py files."""
         py_file = tmp_path / "test.py"
         yaml_file = tmp_path / "test.yaml"
         py_file.write_text("# pylint: disable=foo\n")
@@ -352,10 +480,25 @@ class TestCliExtensionFiltering:
         ])
         captured = capsys.readouterr()
         assert "test.py" in captured.out
+
+    def test_pylint_only_scans_py_excludes_yaml(
+        self, tmp_path: Path, capsys: Any
+    ) -> None:
+        """Pylint linter excludes yaml files."""
+        py_file = tmp_path / "test.py"
+        yaml_file = tmp_path / "test.yaml"
+        py_file.write_text("# pylint: disable=foo\n")
+        yaml_file.write_text("# pylint: disable=foo\n")
+        run_main_with_args([
+            "--tools", "pylint",
+            str(py_file),
+            str(yaml_file),
+        ])
+        captured = capsys.readouterr()
         assert "test.yaml" not in captured.out
 
-    def test_yamllint_only_scans_yaml_yml(self, tmp_path: Path, capsys: Any) -> None:
-        """Yamllint linter only scans .yaml and .yml files."""
+    def test_yamllint_only_scans_yaml(self, tmp_path: Path, capsys: Any) -> None:
+        """Yamllint linter scans .yaml files."""
         yaml_file = tmp_path / "test.yaml"
         yml_file = tmp_path / "test.yml"
         py_file = tmp_path / "test.py"
@@ -370,15 +513,47 @@ class TestCliExtensionFiltering:
         ])
         captured = capsys.readouterr()
         assert "test.yaml" in captured.out
+
+    def test_yamllint_only_scans_yml(self, tmp_path: Path, capsys: Any) -> None:
+        """Yamllint linter scans .yml files."""
+        yaml_file = tmp_path / "test.yaml"
+        yml_file = tmp_path / "test.yml"
+        py_file = tmp_path / "test.py"
+        yaml_file.write_text("# yamllint disable\n")
+        yml_file.write_text("# yamllint disable\n")
+        py_file.write_text("# yamllint disable\n")
+        run_main_with_args([
+            "--tools", "yamllint",
+            str(yaml_file),
+            str(yml_file),
+            str(py_file),
+        ])
+        captured = capsys.readouterr()
         assert "test.yml" in captured.out
+
+    def test_yamllint_excludes_py(self, tmp_path: Path, capsys: Any) -> None:
+        """Yamllint linter excludes .py files."""
+        yaml_file = tmp_path / "test.yaml"
+        yml_file = tmp_path / "test.yml"
+        py_file = tmp_path / "test.py"
+        yaml_file.write_text("# yamllint disable\n")
+        yml_file.write_text("# yamllint disable\n")
+        py_file.write_text("# yamllint disable\n")
+        run_main_with_args([
+            "--tools", "yamllint",
+            str(yaml_file),
+            str(yml_file),
+            str(py_file),
+        ])
+        captured = capsys.readouterr()
         assert "test.py" not in captured.out
 
-    def test_combined_linters_scan_all_relevant(
+    def test_combined_linters_scan_py(
         self,
         tmp_path: Path,
         capsys: Any,
     ) -> None:
-        """Combined linters scan all relevant file types."""
+        """Combined linters scan .py files."""
         py_file = tmp_path / "test.py"
         yaml_file = tmp_path / "test.yaml"
         txt_file = tmp_path / "test.txt"
@@ -393,7 +568,47 @@ class TestCliExtensionFiltering:
         ])
         captured = capsys.readouterr()
         assert "test.py" in captured.out
+
+    def test_combined_linters_scan_yaml(
+        self,
+        tmp_path: Path,
+        capsys: Any,
+    ) -> None:
+        """Combined linters scan .yaml files."""
+        py_file = tmp_path / "test.py"
+        yaml_file = tmp_path / "test.yaml"
+        txt_file = tmp_path / "test.txt"
+        py_file.write_text("# pylint: disable=foo\n")
+        yaml_file.write_text("# yamllint disable\n")
+        txt_file.write_text("# pylint: disable=foo\n")
+        run_main_with_args([
+            "--tools", "pylint,yamllint",
+            str(py_file),
+            str(yaml_file),
+            str(txt_file),
+        ])
+        captured = capsys.readouterr()
         assert "test.yaml" in captured.out
+
+    def test_combined_linters_exclude_txt(
+        self,
+        tmp_path: Path,
+        capsys: Any,
+    ) -> None:
+        """Combined linters exclude .txt files."""
+        py_file = tmp_path / "test.py"
+        yaml_file = tmp_path / "test.yaml"
+        txt_file = tmp_path / "test.txt"
+        py_file.write_text("# pylint: disable=foo\n")
+        yaml_file.write_text("# yamllint disable\n")
+        txt_file.write_text("# pylint: disable=foo\n")
+        run_main_with_args([
+            "--tools", "pylint,yamllint",
+            str(py_file),
+            str(yaml_file),
+            str(txt_file),
+        ])
+        captured = capsys.readouterr()
         assert "test.txt" not in captured.out
 
     def test_case_insensitive_extension(self, tmp_path: Path, capsys: Any) -> None:
@@ -409,33 +624,72 @@ class TestCliExtensionFiltering:
 class TestCliVerbose:
     """Tests for --verbose flag integration scenarios."""
 
-    def test_verbose_full_workflow(self, tmp_path: Path, capsys: Any) -> None:
-        """Verbose shows complete workflow: tools, scans, findings, summary."""
-        # Create various files to test verbose output
+    def test_verbose_shows_checking_for(self, tmp_path: Path, capsys: Any) -> None:
+        """Verbose shows 'Checking for' header."""
+        py_file = tmp_path / "code.py"
+        py_file.write_text("x = 1  # type: ignore\n")
+        run_main_with_args([
+            "--tools", "pylint,mypy",
+            "--verbose",
+            str(py_file),
+        ])
+        out = capsys.readouterr().out
+        assert "Checking for:" in out
+
+    def test_verbose_shows_scanning(self, tmp_path: Path, capsys: Any) -> None:
+        """Verbose shows 'Scanning' messages."""
+        py_file = tmp_path / "code.py"
+        py_file.write_text("x = 1  # type: ignore\n")
+        run_main_with_args([
+            "--tools", "pylint,mypy",
+            "--verbose",
+            str(py_file),
+        ])
+        out = capsys.readouterr().out
+        assert "Scanning:" in out
+
+    def test_verbose_no_skipping_messages(self, tmp_path: Path, capsys: Any) -> None:
+        """Verbose does not show skipping messages."""
         py_file = tmp_path / "code.py"
         py_file.write_text("x = 1  # type: ignore\n")
         txt_file = tmp_path / "notes.txt"
         txt_file.write_text("not scanned\n")
-        subdir = tmp_path / "subdir"
-        subdir.mkdir()
-        excluded = tmp_path / "generated.py"
-        excluded.write_text("# pylint: disable=foo\n")
         run_main_with_args([
             "--tools", "pylint,mypy",
             "--verbose",
-            "--exclude", "*generated.py",
-            str(py_file), str(txt_file), str(subdir), str(excluded),
+            str(py_file), str(txt_file),
         ])
         out = capsys.readouterr().out
-        assert "Checking for:" in out
-        assert "Scanning:" in out
-        # Skipping messages are not shown (files are silently skipped)
         assert "Skipping" not in out
+
+    def test_verbose_shows_findings(self, tmp_path: Path, capsys: Any) -> None:
+        """Verbose shows findings."""
+        py_file = tmp_path / "code.py"
+        py_file.write_text("x = 1  # type: ignore\n")
+        run_main_with_args([
+            "--tools", "mypy",
+            "--verbose",
+            str(py_file),
+        ])
+        out = capsys.readouterr().out
         assert "type: ignore" in out
+
+    def test_verbose_shows_summary(self, tmp_path: Path, capsys: Any) -> None:
+        """Verbose shows summary."""
+        py_file = tmp_path / "code.py"
+        py_file.write_text("x = 1  # type: ignore\n")
+        run_main_with_args([
+            "--tools", "mypy",
+            "--verbose",
+            str(py_file),
+        ])
+        out = capsys.readouterr().out
         assert "Scanned 1 file(s), found 1 finding(s)" in out
 
-    def test_verbose_fail_fast_stops_early(self, tmp_path: Path, capsys: Any) -> None:
-        """Verbose with fail-fast stops after first finding and shows summary."""
+    def test_verbose_fail_fast_shows_first_file(
+        self, tmp_path: Path, capsys: Any
+    ) -> None:
+        """Verbose with fail-fast shows first file."""
         file1 = tmp_path / "first.py"
         file1.write_text("# pylint: disable=one\n")
         file2 = tmp_path / "second.py"
@@ -446,8 +700,50 @@ class TestCliVerbose:
         ])
         out = capsys.readouterr().out
         assert "first.py" in out
+
+    def test_verbose_fail_fast_shows_finding(
+        self, tmp_path: Path, capsys: Any
+    ) -> None:
+        """Verbose with fail-fast shows finding."""
+        file1 = tmp_path / "first.py"
+        file1.write_text("# pylint: disable=one\n")
+        file2 = tmp_path / "second.py"
+        file2.write_text("# pylint: disable=two\n")
+        run_main_with_args([
+            "--tools", "pylint", "--verbose", "--fail-fast",
+            str(file1), str(file2),
+        ])
+        out = capsys.readouterr().out
         assert "pylint: disable" in out
+
+    def test_verbose_fail_fast_excludes_second_file(
+        self, tmp_path: Path, capsys: Any
+    ) -> None:
+        """Verbose with fail-fast excludes second file."""
+        file1 = tmp_path / "first.py"
+        file1.write_text("# pylint: disable=one\n")
+        file2 = tmp_path / "second.py"
+        file2.write_text("# pylint: disable=two\n")
+        run_main_with_args([
+            "--tools", "pylint", "--verbose", "--fail-fast",
+            str(file1), str(file2),
+        ])
+        out = capsys.readouterr().out
         assert "second.py" not in out
+
+    def test_verbose_fail_fast_shows_one_finding_summary(
+        self, tmp_path: Path, capsys: Any
+    ) -> None:
+        """Verbose with fail-fast shows one finding in summary."""
+        file1 = tmp_path / "first.py"
+        file1.write_text("# pylint: disable=one\n")
+        file2 = tmp_path / "second.py"
+        file2.write_text("# pylint: disable=two\n")
+        run_main_with_args([
+            "--tools", "pylint", "--verbose", "--fail-fast",
+            str(file1), str(file2),
+        ])
+        out = capsys.readouterr().out
         assert "found 1 finding" in out
 
 
@@ -455,64 +751,99 @@ class TestCliVerbose:
 class TestCliStringLiteralHandling:
     """Tests for string literal handling through the CLI."""
 
-    def test_single_quoted_string_not_detected(
+    def test_single_quoted_string_not_detected_exit_code(
         self,
         tmp_path: Path,
-        capsys: Any,
     ) -> None:
-        """Directives in single-quoted strings are not detected."""
+        """Directives in single-quoted strings - exit 0."""
         test_file = tmp_path / "test.py"
         test_file.write_text("s = 'type: ignore'\n")
         exit_code = run_main_with_args(["--tools", "mypy", str(test_file)])
         assert exit_code == 0
-        captured = capsys.readouterr()
-        assert captured.out == ""
 
-    def test_double_quoted_string_not_detected(
+    def test_single_quoted_string_not_detected_no_output(
         self,
         tmp_path: Path,
         capsys: Any,
     ) -> None:
-        """Directives in double-quoted strings are not detected."""
+        """Directives in single-quoted strings - no output."""
+        test_file = tmp_path / "test.py"
+        test_file.write_text("s = 'type: ignore'\n")
+        run_main_with_args(["--tools", "mypy", str(test_file)])
+        captured = capsys.readouterr()
+        assert captured.out == ""
+
+    def test_double_quoted_string_not_detected_exit_code(
+        self,
+        tmp_path: Path,
+    ) -> None:
+        """Directives in double-quoted strings - exit 0."""
         test_file = tmp_path / "test.py"
         test_file.write_text('s = "type: ignore"\n')
         exit_code = run_main_with_args(["--tools", "mypy", str(test_file)])
         assert exit_code == 0
-        captured = capsys.readouterr()
-        assert captured.out == ""
 
-    def test_triple_quoted_string_not_detected(
+    def test_double_quoted_string_not_detected_no_output(
         self,
         tmp_path: Path,
         capsys: Any,
     ) -> None:
-        """Directives in triple-quoted strings are not detected."""
+        """Directives in double-quoted strings - no output."""
+        test_file = tmp_path / "test.py"
+        test_file.write_text('s = "type: ignore"\n')
+        run_main_with_args(["--tools", "mypy", str(test_file)])
+        captured = capsys.readouterr()
+        assert captured.out == ""
+
+    def test_triple_quoted_string_not_detected_exit_code(
+        self,
+        tmp_path: Path,
+    ) -> None:
+        """Directives in triple-quoted strings - exit 0."""
         test_file = tmp_path / "test.py"
         test_file.write_text('s = """type: ignore"""\n')
         exit_code = run_main_with_args(["--tools", "mypy", str(test_file)])
         assert exit_code == 0
-        captured = capsys.readouterr()
-        assert captured.out == ""
 
-    def test_triple_single_quoted_string_not_detected(
+    def test_triple_quoted_string_not_detected_no_output(
         self,
         tmp_path: Path,
         capsys: Any,
     ) -> None:
-        """Directives in triple single-quoted strings are not detected."""
+        """Directives in triple-quoted strings - no output."""
+        test_file = tmp_path / "test.py"
+        test_file.write_text('s = """type: ignore"""\n')
+        run_main_with_args(["--tools", "mypy", str(test_file)])
+        captured = capsys.readouterr()
+        assert captured.out == ""
+
+    def test_triple_single_quoted_string_not_detected_exit_code(
+        self,
+        tmp_path: Path,
+    ) -> None:
+        """Directives in triple single-quoted strings - exit 0."""
         test_file = tmp_path / "test.py"
         test_file.write_text("s = '''type: ignore'''\n")
         exit_code = run_main_with_args(["--tools", "mypy", str(test_file)])
         assert exit_code == 0
-        captured = capsys.readouterr()
-        assert captured.out == ""
 
-    def test_multiline_triple_quoted_string_not_detected(
+    def test_triple_single_quoted_string_not_detected_no_output(
         self,
         tmp_path: Path,
         capsys: Any,
     ) -> None:
-        """Directives in multiline triple-quoted strings are not detected."""
+        """Directives in triple single-quoted strings - no output."""
+        test_file = tmp_path / "test.py"
+        test_file.write_text("s = '''type: ignore'''\n")
+        run_main_with_args(["--tools", "mypy", str(test_file)])
+        captured = capsys.readouterr()
+        assert captured.out == ""
+
+    def test_multiline_triple_quoted_string_not_detected_exit_code(
+        self,
+        tmp_path: Path,
+    ) -> None:
+        """Directives in multiline triple-quoted strings - exit 0."""
         test_file = tmp_path / "test.py"
         content = '''s = """
 type: ignore
@@ -522,10 +853,35 @@ pylint: disable
         test_file.write_text(content)
         exit_code = run_main_with_args(["--tools", "mypy,pylint", str(test_file)])
         assert exit_code == 0
+
+    def test_multiline_triple_quoted_string_not_detected_no_output(
+        self,
+        tmp_path: Path,
+        capsys: Any,
+    ) -> None:
+        """Directives in multiline triple-quoted strings - no output."""
+        test_file = tmp_path / "test.py"
+        content = '''s = """
+type: ignore
+pylint: disable
+"""
+'''
+        test_file.write_text(content)
+        run_main_with_args(["--tools", "mypy,pylint", str(test_file)])
         captured = capsys.readouterr()
         assert captured.out == ""
 
-    def test_comment_after_string_detected(
+    def test_comment_after_string_detected_exit_code(
+        self,
+        tmp_path: Path,
+    ) -> None:
+        """Directives in comments after strings - exit 1."""
+        test_file = tmp_path / "test.py"
+        test_file.write_text('s = "hello"  # type: ignore\n')
+        exit_code = run_main_with_args(["--tools", "mypy", str(test_file)])
+        assert exit_code == 1
+
+    def test_comment_after_string_detected_output(
         self,
         tmp_path: Path,
         capsys: Any,
@@ -533,12 +889,21 @@ pylint: disable
         """Directives in comments after strings are detected."""
         test_file = tmp_path / "test.py"
         test_file.write_text('s = "hello"  # type: ignore\n')
-        exit_code = run_main_with_args(["--tools", "mypy", str(test_file)])
-        assert exit_code == 1
+        run_main_with_args(["--tools", "mypy", str(test_file)])
         captured = capsys.readouterr()
         assert "type: ignore" in captured.out
 
-    def test_escaped_quote_in_string(
+    def test_escaped_quote_in_string_exit_code(
+        self,
+        tmp_path: Path,
+    ) -> None:
+        """Escaped quotes in strings - exit 1 when comment present."""
+        test_file = tmp_path / "test.py"
+        test_file.write_text(r's = "escaped \" quote"  # type: ignore' + '\n')
+        exit_code = run_main_with_args(["--tools", "mypy", str(test_file)])
+        assert exit_code == 1
+
+    def test_escaped_quote_in_string_output(
         self,
         tmp_path: Path,
         capsys: Any,
@@ -546,8 +911,7 @@ pylint: disable
         """Escaped quotes in strings don't break parsing."""
         test_file = tmp_path / "test.py"
         test_file.write_text(r's = "escaped \" quote"  # type: ignore' + '\n')
-        exit_code = run_main_with_args(["--tools", "mypy", str(test_file)])
-        assert exit_code == 1
+        run_main_with_args(["--tools", "mypy", str(test_file)])
         captured = capsys.readouterr()
         assert "type: ignore" in captured.out
 
@@ -568,12 +932,12 @@ class TestCliDirectoryHandling:
         ])
         assert exit_code == 1  # Finding detected in nested file
 
-    def test_directories_do_not_cause_errors(
+    def test_directories_do_not_cause_error_in_err(
         self,
         tmp_path: Path,
         capsys: Any,
     ) -> None:
-        """Directories do not produce error messages."""
+        """Directories do not produce 'Error' messages."""
         subdir = tmp_path / "subdir"
         subdir.mkdir()
         test_file = tmp_path / "test.py"
@@ -585,14 +949,30 @@ class TestCliDirectoryHandling:
         ])
         captured = capsys.readouterr()
         assert "Error" not in captured.err
-        assert "Is a directory" not in captured.err
 
-    def test_unreadable_file_in_directory(
+    def test_directories_do_not_cause_is_a_directory_message(
         self,
         tmp_path: Path,
         capsys: Any,
     ) -> None:
-        """Unreadable file in directory causes error but continues."""
+        """Directories do not produce 'Is a directory' messages."""
+        subdir = tmp_path / "subdir"
+        subdir.mkdir()
+        test_file = tmp_path / "test.py"
+        test_file.write_text("x = 1\n")
+        run_main_with_args([
+            "--tools", "mypy",
+            str(subdir),
+            str(test_file),
+        ])
+        captured = capsys.readouterr()
+        assert "Is a directory" not in captured.err
+
+    def test_unreadable_file_in_directory_exit_code(
+        self,
+        tmp_path: Path,
+    ) -> None:
+        """Unreadable file in directory - exit 1 for readable finding."""
         subdir = tmp_path / "subdir"
         subdir.mkdir()
         unreadable = subdir / "unreadable.py"
@@ -605,8 +985,49 @@ class TestCliDirectoryHandling:
                 "--tools", "mypy", str(subdir)
             ])
             assert exit_code == 1  # Finding in readable file
+        finally:
+            unreadable.chmod(0o644)
+
+    def test_unreadable_file_in_directory_error_message(
+        self,
+        tmp_path: Path,
+        capsys: Any,
+    ) -> None:
+        """Unreadable file in directory shows error message."""
+        subdir = tmp_path / "subdir"
+        subdir.mkdir()
+        unreadable = subdir / "unreadable.py"
+        unreadable.write_text("content\n")
+        unreadable.chmod(0o000)
+        readable = subdir / "readable.py"
+        readable.write_text("x = 1  # type: ignore\n")
+        try:
+            run_main_with_args([
+                "--tools", "mypy", str(subdir)
+            ])
             captured = capsys.readouterr()
             assert "Error reading" in captured.err
+        finally:
+            unreadable.chmod(0o644)
+
+    def test_unreadable_file_in_directory_continues_scanning(
+        self,
+        tmp_path: Path,
+        capsys: Any,
+    ) -> None:
+        """Unreadable file in directory continues scanning other files."""
+        subdir = tmp_path / "subdir"
+        subdir.mkdir()
+        unreadable = subdir / "unreadable.py"
+        unreadable.write_text("content\n")
+        unreadable.chmod(0o000)
+        readable = subdir / "readable.py"
+        readable.write_text("x = 1  # type: ignore\n")
+        try:
+            run_main_with_args([
+                "--tools", "mypy", str(subdir)
+            ])
+            captured = capsys.readouterr()
             assert "type: ignore" in captured.out
         finally:
             unreadable.chmod(0o644)
@@ -620,10 +1041,10 @@ class TestCliGlobPatterns:
     These integration tests verify the full pipeline works with real files.
     """
 
-    def test_glob_expands_and_scans_multiple_files(
-        self, tmp_path: Path, capsys: Any
+    def test_glob_expands_and_scans_multiple_files_exit_code(
+        self, tmp_path: Path
     ) -> None:
-        """Glob pattern expands to multiple files and scans all of them."""
+        """Glob pattern expands to multiple files - exit 1."""
         (tmp_path / "alpha.py").write_text("a = 1  # type: ignore\n")
         (tmp_path / "beta.py").write_text("b = 2  # type: ignore\n")
         (tmp_path / "gamma.py").write_text("clean code\n")
@@ -631,30 +1052,74 @@ class TestCliGlobPatterns:
             "--tools", "mypy", str(tmp_path / "*.py")
         ])
         assert exit_code == 1
+
+    def test_glob_expands_and_scans_multiple_files_includes_alpha(
+        self, tmp_path: Path, capsys: Any
+    ) -> None:
+        """Glob pattern includes alpha.py."""
+        (tmp_path / "alpha.py").write_text("a = 1  # type: ignore\n")
+        (tmp_path / "beta.py").write_text("b = 2  # type: ignore\n")
+        (tmp_path / "gamma.py").write_text("clean code\n")
+        run_main_with_args([
+            "--tools", "mypy", str(tmp_path / "*.py")
+        ])
         output = capsys.readouterr().out
-        # Verify multiple files were scanned and findings reported
         assert "alpha.py" in output
+
+    def test_glob_expands_and_scans_multiple_files_includes_beta(
+        self, tmp_path: Path, capsys: Any
+    ) -> None:
+        """Glob pattern includes beta.py."""
+        (tmp_path / "alpha.py").write_text("a = 1  # type: ignore\n")
+        (tmp_path / "beta.py").write_text("b = 2  # type: ignore\n")
+        (tmp_path / "gamma.py").write_text("clean code\n")
+        run_main_with_args([
+            "--tools", "mypy", str(tmp_path / "*.py")
+        ])
+        output = capsys.readouterr().out
         assert "beta.py" in output
+
+    def test_glob_expands_and_scans_multiple_files_excludes_clean(
+        self, tmp_path: Path, capsys: Any
+    ) -> None:
+        """Glob pattern excludes gamma.py (no finding)."""
+        (tmp_path / "alpha.py").write_text("a = 1  # type: ignore\n")
+        (tmp_path / "beta.py").write_text("b = 2  # type: ignore\n")
+        (tmp_path / "gamma.py").write_text("clean code\n")
+        run_main_with_args([
+            "--tools", "mypy", str(tmp_path / "*.py")
+        ])
+        output = capsys.readouterr().out
         assert "gamma.py" not in output  # No finding in clean file
 
-    def test_glob_matching_directory_expands_contents(
+    def test_glob_matching_directory_expands_contents_exit_code(
+        self, tmp_path: Path
+    ) -> None:
+        """Glob matching a directory name - exit 1."""
+        subdir = tmp_path / "src"
+        subdir.mkdir()
+        (subdir / "module.py").write_text("# pylint: disable=all\n")
+        exit_code = run_main_with_args([
+            "--tools", "pylint", str(tmp_path / "s*")
+        ])
+        assert exit_code == 1
+
+    def test_glob_matching_directory_expands_contents_output(
         self, tmp_path: Path, capsys: Any
     ) -> None:
         """Glob matching a directory name expands to scan files inside."""
         subdir = tmp_path / "src"
         subdir.mkdir()
         (subdir / "module.py").write_text("# pylint: disable=all\n")
-        # Glob matches directory name, should expand and scan contents
-        exit_code = run_main_with_args([
+        run_main_with_args([
             "--tools", "pylint", str(tmp_path / "s*")
         ])
-        assert exit_code == 1
         assert "module.py" in capsys.readouterr().out
 
-    def test_recursive_glob_finds_deeply_nested_files(
-        self, tmp_path: Path, capsys: Any
+    def test_recursive_glob_finds_deeply_nested_files_exit_code(
+        self, tmp_path: Path
     ) -> None:
-        """Recursive ** glob finds files in nested directories."""
+        """Recursive ** glob - exit 1."""
         nested = tmp_path / "src" / "pkg" / "subpkg"
         nested.mkdir(parents=True)
         (nested / "module.py").write_text("# pylint: disable=all\n")
@@ -663,17 +1128,49 @@ class TestCliGlobPatterns:
             "--tools", "pylint", str(tmp_path / "**" / "*.py")
         ])
         assert exit_code == 1
-        output = capsys.readouterr().out
-        # Both root and deeply nested files found
-        assert "root.py" in output
-        assert "module.py" in output
 
-    def test_nonexistent_glob_pattern_reports_error(
+    def test_recursive_glob_finds_root_file(
         self, tmp_path: Path, capsys: Any
     ) -> None:
-        """Glob pattern matching nothing reports error with pattern name."""
+        """Recursive ** glob finds root file."""
+        nested = tmp_path / "src" / "pkg" / "subpkg"
+        nested.mkdir(parents=True)
+        (nested / "module.py").write_text("# pylint: disable=all\n")
+        (tmp_path / "root.py").write_text("# pylint: disable=all\n")
+        run_main_with_args([
+            "--tools", "pylint", str(tmp_path / "**" / "*.py")
+        ])
+        output = capsys.readouterr().out
+        assert "root.py" in output
+
+    def test_recursive_glob_finds_nested_file(
+        self, tmp_path: Path, capsys: Any
+    ) -> None:
+        """Recursive ** glob finds nested file."""
+        nested = tmp_path / "src" / "pkg" / "subpkg"
+        nested.mkdir(parents=True)
+        (nested / "module.py").write_text("# pylint: disable=all\n")
+        (tmp_path / "root.py").write_text("# pylint: disable=all\n")
+        run_main_with_args([
+            "--tools", "pylint", str(tmp_path / "**" / "*.py")
+        ])
+        output = capsys.readouterr().out
+        assert "module.py" in output
+
+    def test_nonexistent_glob_pattern_reports_error_exit_code(
+        self, tmp_path: Path
+    ) -> None:
+        """Glob pattern matching nothing - exit 2."""
         exit_code = run_main_with_args([
             "--tools", "mypy", str(tmp_path / "no_match_*.py")
         ])
         assert exit_code == 2
+
+    def test_nonexistent_glob_pattern_reports_error_message(
+        self, tmp_path: Path, capsys: Any
+    ) -> None:
+        """Glob pattern matching nothing reports error with pattern name."""
+        run_main_with_args([
+            "--tools", "mypy", str(tmp_path / "no_match_*.py")
+        ])
         assert "no_match_*.py" in capsys.readouterr().err

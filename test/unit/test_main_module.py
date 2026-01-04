@@ -19,7 +19,7 @@ class TestMainModule:
                 importlib.reload(sys.modules["assert_no_inline_directives.__main__"])
             else:
                 importlib.import_module("assert_no_inline_directives.__main__")
-            mock_main.assert_called()
+            assert mock_main.called
 
     def test_main_module_can_be_imported(self) -> None:
         """__main__ module exists and can be imported."""
