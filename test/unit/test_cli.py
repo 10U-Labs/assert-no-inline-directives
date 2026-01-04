@@ -4,6 +4,8 @@ These tests use mocking to isolate CLI logic from scanner implementation,
 following TDD principles where tests can be written before implementation.
 """
 
+import io
+import sys
 from collections.abc import Generator
 from contextlib import contextmanager
 from pathlib import Path
@@ -38,6 +40,51 @@ def mock_scan_file(
     with patch("assert_no_inline_directives.cli.scan_file") as mock:
         mock.return_value = return_value if return_value is not None else []
         yield mock
+
+
+@contextmanager
+def unreadable_and_readable_files(
+    tmp_path: Path
+) -> Generator[tuple[Path, Path], None, None]:
+    """Create unreadable and readable test files, cleanup on exit."""
+    unreadable = tmp_path / "unreadable.py"
+    unreadable.write_text("x = 1\n")
+    unreadable.chmod(0o000)
+    readable = tmp_path / "readable.py"
+    readable.write_text("x = 1\n")
+    try:
+        yield unreadable, readable
+    finally:
+        unreadable.chmod(0o644)
+
+
+def run_with_unreadable_file_and_finding(tmp_path: Path) -> tuple[str, str]:
+    """Run with unreadable + readable files with finding, return (stdout, stderr)."""
+    old_out, old_err = sys.stdout, sys.stderr
+    sys.stdout, sys.stderr = io.StringIO(), io.StringIO()
+    try:
+        with unreadable_and_readable_files(tmp_path) as (unreadable, readable):
+            finding = create_mock_finding(str(readable), 1, "pylint", "pylint: disable")
+            with mock_scan_file([finding]):
+                run_main_with_args(["--tools", "pylint", str(unreadable), str(readable)])
+        return sys.stdout.getvalue(), sys.stderr.getvalue()
+    finally:
+        sys.stdout, sys.stderr = old_out, old_err
+
+
+def run_verbose_with_finding(tmp_path: Path) -> str:
+    """Run verbose mode with a single finding and return stdout."""
+    test_file = tmp_path / "test.py"
+    test_file.write_text("x = 1\n")
+    finding = create_mock_finding(str(test_file), 1, "pylint", "pylint: disable")
+    old_stdout, old_stderr = sys.stdout, sys.stderr
+    sys.stdout, sys.stderr = io.StringIO(), io.StringIO()
+    try:
+        with mock_scan_file([finding]):
+            run_main_with_args(["--tools", "pylint", "--verbose", str(test_file)])
+        return sys.stdout.getvalue()
+    finally:
+        sys.stdout, sys.stderr = old_stdout, old_stderr
 
 
 @pytest.mark.unit
@@ -279,29 +326,15 @@ class TestVerboseFlag:
         captured = capsys.readouterr()
         assert "Skipping" not in captured.out
 
-    def test_verbose_shows_findings(
-        self, tmp_path: Path, capsys: Any
-    ) -> None:
+    def test_verbose_shows_findings(self, tmp_path: Path) -> None:
         """Verbose shows findings inline."""
-        test_file = tmp_path / "test.py"
-        test_file.write_text("x = 1\n")
-        finding = create_mock_finding(str(test_file), 1, "pylint", "pylint: disable")
-        with mock_scan_file([finding]):
-            run_main_with_args(["--tools", "pylint", "--verbose", str(test_file)])
-        captured = capsys.readouterr()
-        assert "pylint: disable" in captured.out
+        output = run_verbose_with_finding(tmp_path)
+        assert "pylint: disable" in output
 
-    def test_verbose_shows_summary(
-        self, tmp_path: Path, capsys: Any
-    ) -> None:
+    def test_verbose_shows_summary(self, tmp_path: Path) -> None:
         """Verbose shows summary at end."""
-        test_file = tmp_path / "test.py"
-        test_file.write_text("x = 1\n")
-        finding = create_mock_finding(str(test_file), 1, "pylint", "pylint: disable")
-        with mock_scan_file([finding]):
-            run_main_with_args(["--tools", "pylint", "--verbose", str(test_file)])
-        captured = capsys.readouterr()
-        assert "Scanned 1 file(s), found 1 finding(s)" in captured.out
+        output = run_verbose_with_finding(tmp_path)
+        assert "Scanned 1 file(s), found 1 finding(s)" in output
 
     def test_verbose_short_flag(self, tmp_path: Path, capsys: Any) -> None:
         """Short -v flag works."""
@@ -392,65 +425,25 @@ class TestErrorHandling:
         finally:
             test_file.chmod(0o644)
 
-    def test_unreadable_file_continues_scanning_exit_code(
-        self, tmp_path: Path,
-    ) -> None:
+    def test_unreadable_file_continues_scanning_exit_code(self, tmp_path: Path) -> None:
         """Unreadable file doesn't stop scanning - exit 1 for finding."""
-        unreadable = tmp_path / "unreadable.py"
-        unreadable.write_text("x = 1\n")
-        unreadable.chmod(0o000)
-        readable = tmp_path / "readable.py"
-        readable.write_text("x = 1\n")
-        finding = create_mock_finding(str(readable), 1, "pylint", "pylint: disable")
-        try:
+        with unreadable_and_readable_files(tmp_path) as (unreadable, readable):
+            finding = create_mock_finding(str(readable), 1, "pylint", "pylint: disable")
             with mock_scan_file([finding]):
                 exit_code = run_main_with_args([
                     "--tools", "pylint", str(unreadable), str(readable)
                 ])
-            # Exit 1 because we found a violation (takes precedence over error)
             assert exit_code == 1
-        finally:
-            unreadable.chmod(0o644)
 
-    def test_unreadable_file_continues_scanning_error_message(
-        self, tmp_path: Path, capsys: Any
-    ) -> None:
+    def test_unreadable_file_continues_scanning_error_message(self, tmp_path: Path) -> None:
         """Unreadable file shows error but continues scanning."""
-        unreadable = tmp_path / "unreadable.py"
-        unreadable.write_text("x = 1\n")
-        unreadable.chmod(0o000)
-        readable = tmp_path / "readable.py"
-        readable.write_text("x = 1\n")
-        finding = create_mock_finding(str(readable), 1, "pylint", "pylint: disable")
-        try:
-            with mock_scan_file([finding]):
-                run_main_with_args([
-                    "--tools", "pylint", str(unreadable), str(readable)
-                ])
-            captured = capsys.readouterr()
-            assert "Error reading" in captured.err
-        finally:
-            unreadable.chmod(0o644)
+        _, stderr = run_with_unreadable_file_and_finding(tmp_path)
+        assert "Error reading" in stderr
 
-    def test_unreadable_file_continues_scanning_outputs_finding(
-        self, tmp_path: Path, capsys: Any
-    ) -> None:
+    def test_unreadable_file_continues_scanning_outputs_finding(self, tmp_path: Path) -> None:
         """Unreadable file continues scanning and outputs finding."""
-        unreadable = tmp_path / "unreadable.py"
-        unreadable.write_text("x = 1\n")
-        unreadable.chmod(0o000)
-        readable = tmp_path / "readable.py"
-        readable.write_text("x = 1\n")
-        finding = create_mock_finding(str(readable), 1, "pylint", "pylint: disable")
-        try:
-            with mock_scan_file([finding]):
-                run_main_with_args([
-                    "--tools", "pylint", str(unreadable), str(readable)
-                ])
-            captured = capsys.readouterr()
-            assert "pylint: disable" in captured.out
-        finally:
-            unreadable.chmod(0o644)
+        stdout, _ = run_with_unreadable_file_and_finding(tmp_path)
+        assert "pylint: disable" in stdout
 
 
 @pytest.mark.unit
