@@ -148,6 +148,30 @@ def _get_comment_portion(
     return None, in_string
 
 
+def _skip_c_string_literal(line: str, i: int, quote: str) -> int:
+    """Skip past a C/C++ string or character literal.
+
+    Advances past the contents of a string or character literal,
+    handling backslash escape sequences.
+
+    Args:
+        line: The line of text.
+        i: Index just after the opening quote character.
+        quote: The quote character ('"' or "'").
+
+    Returns:
+        Index of the closing quote character, or end of line.
+    """
+    while i < len(line):
+        if line[i] == "\\":
+            i += 2
+            continue
+        if line[i] == quote:
+            break
+        i += 1
+    return i
+
+
 def _get_c_comment_portion(
     line: str,
     in_block_comment: bool,
@@ -194,31 +218,68 @@ def _get_c_comment_portion(
             i = end + 2
             continue
 
-        if line[i] == '"':
-            i += 1
-            while i < len(line):
-                if line[i] == "\\":
-                    i += 2
-                    continue
-                if line[i] == '"':
-                    break
-                i += 1
-
-        elif line[i] == "'":
-            i += 1
-            while i < len(line):
-                if line[i] == "\\":
-                    i += 2
-                    continue
-                if line[i] == "'":
-                    break
-                i += 1
+        if line[i] in ('"', "'"):
+            i = _skip_c_string_literal(line, i + 1, line[i])
 
         i += 1
 
     if comment_parts:
         return " ".join(comment_parts), in_block_comment
     return None, in_block_comment
+
+
+def _find_comment_directives(
+    comment: str | None,
+    tools: frozenset[str],
+) -> list[tuple[str, str]]:
+    """Find matching directives in the comment portion of a line.
+
+    Checks each tool's comment-based patterns against the comment text.
+    Only reports the first matching pattern per tool.
+
+    Args:
+        comment: The comment portion of the line, or None.
+        tools: Set of tools to check.
+
+    Returns:
+        A list of (tool, directive) tuples for each finding.
+    """
+    if comment is None:
+        return []
+    findings: list[tuple[str, str]] = []
+    for tool in tools:
+        patterns = TOOL_PATTERNS.get(tool, [])
+        for pattern, directive in patterns:
+            if pattern.search(comment):
+                findings.append((tool, directive))
+                break  # Only report one finding per tool per line
+    return findings
+
+
+def _find_line_directives(
+    line: str,
+    tools: frozenset[str],
+) -> list[tuple[str, str]]:
+    """Find matching line-based directives (e.g., #pragma).
+
+    Checks each tool's line-based patterns against the full line text.
+    Only reports the first matching pattern per tool.
+
+    Args:
+        line: The full line of text.
+        tools: Set of tools to check.
+
+    Returns:
+        A list of (tool, directive) tuples for each finding.
+    """
+    findings: list[tuple[str, str]] = []
+    for tool in tools:
+        patterns = TOOL_LINE_PATTERNS.get(tool, [])
+        for pattern, directive in patterns:
+            if pattern.search(line):
+                findings.append((tool, directive))
+                break  # Only report one finding per tool per line
+    return findings
 
 
 def scan_line(
@@ -246,25 +307,26 @@ def scan_line(
     else:
         comment, _ = _get_comment_portion(line, None)
 
-    findings: list[tuple[str, str]] = []
-
-    if comment is not None:
-        for tool in tools:
-            patterns = TOOL_PATTERNS.get(tool, [])
-            for pattern, directive in patterns:
-                if pattern.search(comment):
-                    findings.append((tool, directive))
-                    break  # Only report one finding per tool per line
-
-    # Check line-based patterns (e.g., #pragma directives)
-    for tool in tools:
-        patterns = TOOL_LINE_PATTERNS.get(tool, [])
-        for pattern, directive in patterns:
-            if pattern.search(line):
-                findings.append((tool, directive))
-                break  # Only report one finding per tool per line
-
+    findings = _find_comment_directives(comment, tools)
+    findings.extend(_find_line_directives(line, tools))
     return findings
+
+
+def _is_allowed(line: str, allow_patterns: list[str]) -> bool:
+    """Check if a line matches any allow pattern.
+
+    Args:
+        line: The line of text to check.
+        allow_patterns: List of patterns to allow.
+
+    Returns:
+        True if the line matches any allow pattern.
+    """
+    line_lower = line.lower()
+    return any(
+        allow_pat.lower() in line_lower
+        for allow_pat in allow_patterns
+    )
 
 
 def scan_file(
@@ -290,8 +352,7 @@ def scan_file(
     if allow_patterns is None:
         allow_patterns = []
 
-    _, ext = os.path.splitext(path)
-    is_c_family = ext.lower() in C_EXTENSIONS
+    is_c_family = os.path.splitext(path)[1].lower() in C_EXTENSIONS
 
     findings: list[Finding] = []
     in_string: str | None = None
@@ -307,34 +368,15 @@ def scan_file(
         else:
             comment, in_string = _get_comment_portion(line, in_string)
 
-        # Find all matching directives in this line's comment
-        line_findings: list[tuple[str, str]] = []
-
-        if comment is not None:
-            for tool in tools:
-                patterns = TOOL_PATTERNS.get(tool, [])
-                for pattern, directive in patterns:
-                    if pattern.search(comment):
-                        line_findings.append((tool, directive))
-                        break  # Only one finding per tool per line
+        line_findings = _find_comment_directives(comment, tools)
 
         # Check line-based patterns (e.g., #pragma directives)
         # Skip if line started inside a block comment
         if not was_in_block_comment:
-            for tool in tools:
-                patterns = TOOL_LINE_PATTERNS.get(tool, [])
-                for pattern, directive in patterns:
-                    if pattern.search(line):
-                        line_findings.append((tool, directive))
-                        break  # Only one finding per tool per line
+            line_findings.extend(_find_line_directives(line, tools))
 
         for tool, directive in line_findings:
-            # Check if this directive matches any allow pattern
-            is_allowed = any(
-                allow_pat.lower() in line.lower()
-                for allow_pat in allow_patterns
-            )
-            if not is_allowed:
+            if not _is_allowed(line, allow_patterns):
                 findings.append(Finding(
                     path=path,
                     line_number=line_number,

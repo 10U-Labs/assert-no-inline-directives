@@ -1172,11 +1172,19 @@ class TestGetRelevantExtensionsClang:
             ".c", ".cc", ".cpp", ".cxx", ".h", ".hpp", ".hxx", ".m", ".mm",
         })
 
-    def test_combined_python_and_clang_tools(self) -> None:
-        """Combined Python and clang tools return all extensions."""
+    def test_combined_python_and_clang_tools_includes_py(self) -> None:
+        """Combined Python and clang tools include .py extension."""
         result = get_relevant_extensions(frozenset({"pylint", "clang-tidy"}))
         assert ".py" in result
+
+    def test_combined_python_and_clang_tools_includes_cpp(self) -> None:
+        """Combined Python and clang tools include .cpp extension."""
+        result = get_relevant_extensions(frozenset({"pylint", "clang-tidy"}))
         assert ".cpp" in result
+
+    def test_combined_python_and_clang_tools_includes_toml(self) -> None:
+        """Combined Python and clang tools include .toml extension."""
+        result = get_relevant_extensions(frozenset({"pylint", "clang-tidy"}))
         assert ".toml" in result
 
 
@@ -1205,11 +1213,19 @@ class TestGetToolsForExtensionClang:
             "clang-tidy", "clang-format", "clang-diagnostic",
         })
 
-    def test_py_extension_does_not_return_clang_tools(self) -> None:
-        """Python file extension does not return clang tools."""
+    def test_py_extension_does_not_return_clang_tidy(self) -> None:
+        """Python file extension does not return clang-tidy."""
         result = get_tools_for_extension(".py", ALL)
         assert "clang-tidy" not in result
+
+    def test_py_extension_does_not_return_clang_format(self) -> None:
+        """Python file extension does not return clang-format."""
+        result = get_tools_for_extension(".py", ALL)
         assert "clang-format" not in result
+
+    def test_py_extension_does_not_return_clang_diagnostic(self) -> None:
+        """Python file extension does not return clang-diagnostic."""
+        result = get_tools_for_extension(".py", ALL)
         assert "clang-diagnostic" not in result
 
     def test_filters_clang_tools_by_requested(self) -> None:

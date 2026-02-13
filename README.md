@@ -137,15 +137,30 @@ src/main.cpp:8:clang-tidy:NOLINT
 
 - Case-insensitive matching
 - Tolerates extra whitespace (e.g., `pylint:  disable`, `type:   ignore`)
-- Only detects directives in comments (after `#` for Python/YAML, `//` and `/* */` for C/C++), not in string literals
-- `clang-diagnostic` matches `#pragma` preprocessor directives on the full line
-- Does **not** flag "enable" directives (e.g., `yamllint enable`, `NOLINTEND`, `clang-format on`)
-- Files are scanned in alphabetical order for consistent output
-- Glob patterns support hidden directories (e.g., `.github`)
-- Tools only check files with matching extensions:
-  - `clang-diagnostic`: `.c`, `.cc`, `.cpp`, `.cxx`, `.h`, `.hpp`, `.hxx`, `.m`, `.mm`
-  - `clang-format`: `.c`, `.cc`, `.cpp`, `.cxx`, `.h`, `.hpp`, `.hxx`, `.m`, `.mm`
-  - `clang-tidy`: `.c`, `.cc`, `.cpp`, `.cxx`, `.h`, `.hpp`, `.hxx`, `.m`, `.mm`
+- Only detects directives in comments
+  (after `#` for Python/YAML,
+  `//` and `/* */` for C/C++),
+  not in string literals
+- `clang-diagnostic` matches `#pragma`
+  preprocessor directives on the full line
+- Does **not** flag "enable" directives
+  (e.g., `yamllint enable`, `NOLINTEND`,
+  `clang-format on`)
+- Files are scanned in alphabetical order
+  for consistent output
+- Glob patterns support hidden directories
+  (e.g., `.github`)
+- Tools only check files with matching
+  extensions:
+  - `clang-diagnostic`:
+    `.c`, `.cc`, `.cpp`, `.cxx`,
+    `.h`, `.hpp`, `.hxx`, `.m`, `.mm`
+  - `clang-format`:
+    `.c`, `.cc`, `.cpp`, `.cxx`,
+    `.h`, `.hpp`, `.hxx`, `.m`, `.mm`
+  - `clang-tidy`:
+    `.c`, `.cc`, `.cpp`, `.cxx`,
+    `.h`, `.hpp`, `.hxx`, `.m`, `.mm`
   - `coverage`: `.py`, `.toml`
   - `mypy`: `.py`, `.toml`
   - `pylint`: `.py`, `.toml`
