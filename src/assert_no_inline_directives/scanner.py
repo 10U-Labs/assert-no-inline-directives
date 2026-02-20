@@ -8,6 +8,7 @@ from dataclasses import dataclass
 VALID_TOOLS = frozenset({
     "yamllint", "pylint", "mypy", "coverage",
     "clang-tidy", "clang-format", "clang-diagnostic",
+    "markdownlint",
 })
 
 # C/C++ file extensions that use // and /* */ comments
@@ -25,6 +26,7 @@ TOOL_EXTENSIONS: dict[str, frozenset[str]] = {
     "clang-tidy": C_EXTENSIONS,
     "clang-format": C_EXTENSIONS,
     "clang-diagnostic": C_EXTENSIONS,
+    "markdownlint": frozenset({".md"}),
 }
 
 
@@ -102,8 +104,36 @@ CLANG_DIAGNOSTIC_PATTERNS: list[tuple[re.Pattern[str], str]] = [
     ),
 ]
 
+MARKDOWNLINT_PATTERNS: list[tuple[re.Pattern[str], str]] = [
+    (
+        re.compile(r"<!--\s*markdownlint-disable-next-line", re.IGNORECASE),
+        "markdownlint-disable-next-line",
+    ),
+    (
+        re.compile(r"<!--\s*markdownlint-disable-line", re.IGNORECASE),
+        "markdownlint-disable-line",
+    ),
+    (
+        re.compile(r"<!--\s*markdownlint-disable-file", re.IGNORECASE),
+        "markdownlint-disable-file",
+    ),
+    (
+        re.compile(r"<!--\s*markdownlint-disable(?!-)", re.IGNORECASE),
+        "markdownlint-disable",
+    ),
+    (
+        re.compile(r"<!--\s*markdownlint-capture", re.IGNORECASE),
+        "markdownlint-capture",
+    ),
+    (
+        re.compile(r"<!--\s*markdownlint-configure-file", re.IGNORECASE),
+        "markdownlint-configure-file",
+    ),
+]
+
 TOOL_LINE_PATTERNS: dict[str, list[tuple[re.Pattern[str], str]]] = {
     "clang-diagnostic": CLANG_DIAGNOSTIC_PATTERNS,
+    "markdownlint": MARKDOWNLINT_PATTERNS,
 }
 
 
