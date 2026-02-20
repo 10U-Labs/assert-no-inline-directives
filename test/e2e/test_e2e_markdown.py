@@ -124,12 +124,18 @@ class TestCliMarkdownlintEnableNotDetected:
 class TestCliMarkdownlintExtensionFiltering:
     """E2E tests for markdownlint extension filtering."""
 
-    def test_md_files_scanned(self, tmp_path: Path) -> None:
-        """markdownlint scans .md files."""
+    def test_md_files_scanned_returncode(self, tmp_path: Path) -> None:
+        """markdownlint scans .md files - exit code 1."""
         md_file = tmp_path / "test.md"
         md_file.write_text("<!-- markdownlint-disable -->\n")
         result = run_cli("--tools", "markdownlint", str(md_file))
         assert result.returncode == 1
+
+    def test_md_files_scanned_output(self, tmp_path: Path) -> None:
+        """markdownlint scans .md files - output contains filename."""
+        md_file = tmp_path / "test.md"
+        md_file.write_text("<!-- markdownlint-disable -->\n")
+        result = run_cli("--tools", "markdownlint", str(md_file))
         assert "test.md" in result.stdout
 
     def test_py_files_skipped(self, tmp_path: Path) -> None:

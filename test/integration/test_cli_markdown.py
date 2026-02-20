@@ -151,10 +151,10 @@ class TestCliMarkdownlintExtensionFiltering:
         captured = capsys.readouterr()
         assert "test.py" not in captured.out
 
-    def test_combined_markdownlint_and_python_tools(
+    def test_combined_tools_detect_markdownlint(
         self, tmp_path: Path, capsys: Any
     ) -> None:
-        """Combined markdownlint and Python tools scan appropriate files."""
+        """Combined tools detect markdownlint in .md files."""
         md_file = tmp_path / "test.md"
         py_file = tmp_path / "test.py"
         md_file.write_text("<!-- markdownlint-disable -->\n")
@@ -166,6 +166,21 @@ class TestCliMarkdownlintExtensionFiltering:
         ])
         captured = capsys.readouterr()
         assert "markdownlint-disable" in captured.out
+
+    def test_combined_tools_detect_mypy(
+        self, tmp_path: Path, capsys: Any
+    ) -> None:
+        """Combined tools detect mypy in .py files."""
+        md_file = tmp_path / "test.md"
+        py_file = tmp_path / "test.py"
+        md_file.write_text("<!-- markdownlint-disable -->\n")
+        py_file.write_text("x = 1  # type: ignore\n")
+        run_main_with_args([
+            "--tools", "markdownlint,mypy",
+            str(md_file),
+            str(py_file),
+        ])
+        captured = capsys.readouterr()
         assert "type: ignore" in captured.out
 
 
