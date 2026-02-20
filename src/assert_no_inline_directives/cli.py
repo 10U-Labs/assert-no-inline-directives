@@ -38,7 +38,8 @@ def create_parser() -> argparse.ArgumentParser:
         metavar="TOOLS",
         help=(
             "Comma-separated tools to check: "
-            "clang-diagnostic,clang-format,clang-tidy,coverage,mypy,pylint,yamllint"
+            "clang-diagnostic,clang-format,clang-tidy,coverage,"
+            "markdownlint,mypy,pylint,yamllint"
         ),
     )
     parser.add_argument(
