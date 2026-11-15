@@ -599,9 +599,9 @@ class TestGetRelevantExtensions:
         assert result == frozenset({".yaml", ".yml", ".toml"})
 
     def test_coverage_extensions(self) -> None:
-        """Coverage returns .py and .toml extensions."""
+        """Coverage returns .py, .toml and .rs extensions."""
         result = get_relevant_extensions(frozenset({"coverage"}))
-        assert result == frozenset({".py", ".toml"})
+        assert result == frozenset({".py", ".toml", ".rs"})
 
     def test_combined_python_tools(self) -> None:
         """Pylint and mypy together return .py and .toml extensions."""
@@ -611,7 +611,7 @@ class TestGetRelevantExtensions:
     def test_all_tools(self) -> None:
         """All tools return all extensions."""
         result = get_relevant_extensions(frozenset({"yamllint", "pylint", "mypy", "coverage"}))
-        assert result == frozenset({".py", ".yaml", ".yml", ".toml"})
+        assert result == frozenset({".py", ".yaml", ".yml", ".toml", ".rs"})
 
     def test_empty_tools(self) -> None:
         """Empty tools set returns empty extensions."""

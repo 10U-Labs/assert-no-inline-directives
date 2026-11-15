@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pytest
 from test_run_cli import run_cli
+from test_rust_sample import SAMPLE_RS
 from test_write_files import write_files
 
 MIXED_PYTHON = '''"""Module docstring."""
@@ -129,3 +130,12 @@ def fixture_alphabetical_scan_lines(tmp_path: Path) -> list[str]:
     result = run_cli("--tools", "pylint", "--verbose", str(tmp_path))
     lines = result.stdout.splitlines()
     return [line for line in lines if line.startswith("Scanning:")]
+
+
+@pytest.fixture(name="sample_rust_result")
+def fixture_sample_rust_result(
+    tmp_path: Path,
+) -> subprocess.CompletedProcess[str]:
+    """Result of the installed script over the sample Rust file."""
+    write_files(tmp_path, {"sample.rs": SAMPLE_RS})
+    return run_cli("--tools", "clippy,coverage,rustc,rustfmt", str(tmp_path))

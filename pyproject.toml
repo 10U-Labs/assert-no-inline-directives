@@ -18,6 +18,7 @@ classifiers = [
 description = "CLI tool to assert that files contain no inline directives"
 license = "Apache-2.0"
 name = "assert-no-inline-directives"
+dependencies = ["tree-sitter>=0.25", "tree-sitter-rust>=0.24"]
 dynamic = ["version"]
 readme = "README.md"
 requires-python = ">=3.10"

@@ -2,13 +2,18 @@
 
 import os
 import re
+from collections.abc import Iterator, Sequence
 from dataclasses import dataclass
+
+import tree_sitter_rust
+from tree_sitter import Language, Node, Parser
 
 
 VALID_TOOLS = frozenset({
     "yamllint", "pylint", "mypy", "coverage",
     "clang-tidy", "clang-format", "clang-diagnostic",
     "markdownlint",
+    "clippy", "rustc", "rustdoc", "rustfmt",
 })
 
 # C/C++ file extensions that use // and /* */ comments
@@ -16,17 +21,23 @@ C_EXTENSIONS = frozenset({
     ".c", ".cc", ".cpp", ".cxx", ".h", ".hpp", ".hxx", ".m", ".mm",
 })
 
+RUST_EXTENSIONS = frozenset({".rs"})
+
 # File extensions relevant to each tool
 # .toml included for Python tools to catch directives in pyproject.toml comments
 TOOL_EXTENSIONS: dict[str, frozenset[str]] = {
     "yamllint": frozenset({".yaml", ".yml", ".toml"}),
     "pylint": frozenset({".py", ".toml"}),
     "mypy": frozenset({".py", ".toml"}),
-    "coverage": frozenset({".py", ".toml"}),
+    "coverage": frozenset({".py", ".toml", ".rs"}),
     "clang-tidy": C_EXTENSIONS,
     "clang-format": C_EXTENSIONS,
     "clang-diagnostic": C_EXTENSIONS,
     "markdownlint": frozenset({".md"}),
+    "clippy": RUST_EXTENSIONS,
+    "rustc": RUST_EXTENSIONS,
+    "rustdoc": RUST_EXTENSIONS,
+    "rustfmt": RUST_EXTENSIONS,
 }
 
 
@@ -135,6 +146,263 @@ TOOL_LINE_PATTERNS: dict[str, list[tuple[re.Pattern[str], str]]] = {
     "clang-diagnostic": CLANG_DIAGNOSTIC_PATTERNS,
     "markdownlint": MARKDOWNLINT_PATTERNS,
 }
+
+
+# Rust directives are attributes, not comments, so a Rust file is read with
+# its grammar rather than matched line by line.
+RUST = Language(tree_sitter_rust.language())
+
+RUST_ATTRIBUTE_NODES = frozenset({"attribute_item", "inner_attribute_item"})
+
+RUST_PATH_NODES = frozenset({"identifier", "::"})
+
+RUST_LINT_SILENCERS = frozenset({"allow", "expect"})
+
+RUST_LINT_TOOLS = frozenset({"clippy", "rustdoc"})
+
+RUST_DEFAULT_LINT_TOOL = "rustc"
+
+RUSTFMT_SKIP = ("rustfmt", "skip")
+
+RUSTFMT_SKIP_TARGETS = frozenset({"macros", "attributes"})
+
+RUST_COVERAGE_CFGS = frozenset({"coverage", "coverage_nightly"})
+
+RUST_COVERAGE_OFF = "off"
+
+RustPath = tuple[str, ...]
+
+
+def _rust_text(node: Node, source: bytes) -> str:
+    """Return the source text a node spans."""
+    return source[node.start_byte:node.end_byte].decode("utf-8")
+
+
+def _rust_segments(token_tree: Node) -> list[list[Node]]:
+    """Split the arguments of a token tree at its top-level commas.
+
+    Args:
+        token_tree: A token_tree node, delimiters included.
+
+    Returns:
+        The tokens between each pair of commas, empty segments left out.
+    """
+    segments: list[list[Node]] = [[]]
+    for child in token_tree.children[1:-1]:
+        if child.type == ",":
+            segments.append([])
+        else:
+            segments[-1].append(child)
+    return [segment for segment in segments if segment]
+
+
+def _rust_meta(
+    tokens: Sequence[Node],
+    source: bytes,
+) -> tuple[RustPath, Node | None]:
+    """Read a flat run of tokens as an attribute: a path and its arguments.
+
+    Args:
+        tokens: The tokens of one segment of a token tree.
+        source: The file's source bytes.
+
+    Returns:
+        The path's identifiers, and the token tree that follows the path,
+        if one does.
+    """
+    path: list[str] = []
+    rest = list(tokens)
+    while rest and rest[0].type in RUST_PATH_NODES:
+        token = rest.pop(0)
+        if token.type == "identifier":
+            path.append(_rust_text(token, source))
+    arguments = rest[0] if rest and rest[0].type == "token_tree" else None
+    return tuple(path), arguments
+
+
+def _rust_attribute_meta(
+    attribute: Node,
+    source: bytes,
+) -> tuple[RustPath, Node | None]:
+    """Read an attribute node as a path and its arguments."""
+    path_node = attribute.children[0]
+    path = tuple(
+        _rust_text(node, source)
+        for node in _rust_descendants(path_node)
+        if node.type == "identifier"
+    )
+    arguments = next(
+        (child for child in attribute.children if child.type == "token_tree"),
+        None,
+    )
+    return path, arguments
+
+
+def _rust_descendants(node: Node) -> Iterator[Node]:
+    """Yield a node and every node below it, in source order."""
+    yield node
+    for child in node.children:
+        yield from _rust_descendants(child)
+
+
+def _rust_names(nodes: Sequence[Node], source: bytes) -> list[str]:
+    """Return the text of every identifier in or below the given nodes."""
+    return [
+        _rust_text(descendant, source)
+        for node in nodes
+        for descendant in _rust_descendants(node)
+        if descendant.type == "identifier"
+    ]
+
+
+def _rust_coverage_cfg(nodes: Sequence[Node], source: bytes) -> str | None:
+    """Return the first coverage cfg a predicate names, if it names one."""
+    return next(
+        (
+            name for name in _rust_names(nodes, source)
+            if name in RUST_COVERAGE_CFGS
+        ),
+        None,
+    )
+
+
+def _rust_lint_tool(lint: RustPath) -> str:
+    """Return the tool a lint path belongs to."""
+    if len(lint) > 1 and lint[0] in RUST_LINT_TOOLS:
+        return lint[0]
+    return RUST_DEFAULT_LINT_TOOL
+
+
+def _is_rustfmt_skip(path: RustPath) -> bool:
+    """Whether a path is rustfmt::skip or one of its ::macros forms."""
+    return path[:2] == RUSTFMT_SKIP and (
+        len(path) == 2 or (len(path) == 3 and path[2] in RUSTFMT_SKIP_TARGETS)
+    )
+
+
+def _rust_lint_directives(
+    silencer: str,
+    arguments: Node,
+    source: bytes,
+) -> Iterator[tuple[str, str]]:
+    """Yield a finding for each tool whose lint allow or expect names."""
+    for segment in _rust_segments(arguments):
+        lint, _ = _rust_meta(segment, source)
+        if lint:
+            yield _rust_lint_tool(lint), silencer
+
+
+def _rust_cfg_attr_directives(
+    arguments: Node,
+    source: bytes,
+) -> Iterator[tuple[str, str]]:
+    """Yield findings for a cfg_attr: its condition, then its attributes."""
+    condition, *attributes = _rust_segments(arguments) or [[]]
+    cfg = _rust_coverage_cfg(condition, source)
+    if cfg is not None:
+        yield "coverage", f"cfg_attr({cfg})"
+    for segment in attributes:
+        yield from _rust_directives(*_rust_meta(segment, source), source)
+
+
+def _rust_directives(
+    path: RustPath,
+    arguments: Node | None,
+    source: bytes,
+) -> Iterator[tuple[str, str]]:
+    """Yield the (tool, directive) findings of one attribute.
+
+    Args:
+        path: The attribute's path, such as ("allow",) or ("rustfmt", "skip").
+        arguments: The token tree after the path, if there is one.
+        source: The file's source bytes.
+    """
+    if _is_rustfmt_skip(path):
+        yield "rustfmt", "::".join(path)
+    if arguments is None:
+        return
+    name = path[0] if len(path) == 1 else None
+    if name in RUST_LINT_SILENCERS:
+        yield from _rust_lint_directives(path[0], arguments, source)
+    elif name == "coverage":
+        if RUST_COVERAGE_OFF in _rust_names([arguments], source):
+            yield "coverage", f"coverage({RUST_COVERAGE_OFF})"
+    elif name == "cfg":
+        cfg = _rust_coverage_cfg([arguments], source)
+        if cfg is not None:
+            yield "coverage", f"cfg({cfg})"
+    elif name == "cfg_attr":
+        yield from _rust_cfg_attr_directives(arguments, source)
+
+
+def _rust_macro_directives(
+    macro: Node,
+    source: bytes,
+) -> Iterator[tuple[str, str]]:
+    """Yield a coverage finding for a cfg! macro that names coverage."""
+    name = macro.child_by_field_name("macro")
+    if name is None or _rust_text(name, source) != "cfg":
+        return
+    cfg = _rust_coverage_cfg(macro.children, source)
+    if cfg is not None:
+        yield "coverage", f"cfg!({cfg})"
+
+
+def scan_rust(content: str) -> list[tuple[int, str, str]]:
+    """Find the directives of a Rust file by parsing it.
+
+    Reads each attribute, outer or inner, and each cfg! macro. A finding is
+    placed on the line its attribute or macro starts on.
+
+    Args:
+        content: The Rust source.
+
+    Returns:
+        A (line_number, tool, directive) tuple for each finding, in source
+        order, for every tool.
+    """
+    source = content.encode("utf-8")
+    root = Parser(RUST).parse(source).root_node
+    findings: list[tuple[int, str, str]] = []
+    for node in _rust_descendants(root):
+        if node.type in RUST_ATTRIBUTE_NODES:
+            attribute = next(
+                child for child in node.children if child.type == "attribute"
+            )
+            found = _rust_directives(
+                *_rust_attribute_meta(attribute, source), source,
+            )
+        elif node.type == "macro_invocation":
+            found = _rust_macro_directives(node, source)
+        else:
+            continue
+        line_number = node.start_point[0] + 1
+        findings.extend((line_number, tool, directive) for tool, directive in found)
+    return findings
+
+
+def _scan_rust_file(
+    path: str,
+    content: str,
+    tools: frozenset[str],
+    allow_patterns: list[str],
+) -> list[Finding]:
+    """Scan a Rust file, reporting each tool at most once per line."""
+    lines = content.splitlines()
+    seen: set[tuple[int, str]] = set()
+    findings: list[Finding] = []
+    for line_number, tool, directive in scan_rust(content):
+        if tool not in tools or (line_number, tool) in seen:
+            continue
+        seen.add((line_number, tool))
+        if not _is_allowed(lines[line_number - 1], allow_patterns):
+            findings.append(Finding(
+                path=path,
+                line_number=line_number,
+                tool=tool,
+                directive=directive,
+            ))
+    return findings
 
 
 def _get_comment_portion(
@@ -368,7 +636,8 @@ def scan_file(
     """Scan file content for inline directives.
 
     Properly handles multiline strings (Python) and block comments (C/C++)
-    by tracking state across lines.
+    by tracking state across lines. A Rust file is parsed with its grammar,
+    since its directives are attributes rather than comments.
 
     Args:
         path: The file path (used for reporting).
@@ -382,7 +651,10 @@ def scan_file(
     if allow_patterns is None:
         allow_patterns = []
 
-    is_c_family = os.path.splitext(path)[1].lower() in C_EXTENSIONS
+    extension = os.path.splitext(path)[1].lower()
+    if extension in RUST_EXTENSIONS:
+        return _scan_rust_file(path, content, tools, allow_patterns)
+    is_c_family = extension in C_EXTENSIONS
 
     findings: list[Finding] = []
     in_string: str | None = None

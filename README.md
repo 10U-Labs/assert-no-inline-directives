@@ -1,8 +1,8 @@
 # assert-no-inline-directives
 
 A CLI tool to assert that files contain no inline directives for
-clang-diagnostic, clang-format, clang-tidy, coverage, markdownlint,
-mypy, pylint, and yamllint.
+clang-diagnostic, clang-format, clang-tidy, clippy, coverage,
+markdownlint, mypy, pylint, rustc, rustdoc, rustfmt, and yamllint.
 
 ## Usage
 
@@ -12,7 +12,7 @@ assert-no-inline-directives --tools TOOLS [OPTIONS] PATH [PATH ...]
 
 ### Required Arguments
 
-- `--tools TOOLS` - Comma-separated list of tools: `clang-diagnostic,clang-format,clang-tidy,coverage,markdownlint,mypy,pylint,yamllint`
+- `--tools TOOLS` - Comma-separated list of tools: `clang-diagnostic,clang-format,clang-tidy,clippy,coverage,markdownlint,mypy,pylint,rustc,rustdoc,rustfmt,yamllint`
 - `PATH` - One or more file paths, directory paths, or glob patterns to scan
   (directories are scanned recursively, globs support hidden directories)
 
@@ -37,6 +37,9 @@ assert-no-inline-directives --tools clang-tidy "**/*.cpp" "**/*.h"
 
 # Check for coverage pragmas
 assert-no-inline-directives --tools coverage src/
+
+# Check Rust attributes that silence lints, rustfmt or coverage
+assert-no-inline-directives --tools clippy,coverage,rustc,rustdoc,rustfmt src/
 
 # Check for markdownlint suppressions in markdown files
 assert-no-inline-directives --tools markdownlint "**/*.md"
@@ -85,6 +88,7 @@ src/example.py:10:pylint:pylint: disable
 src/example.py:15:mypy:type: ignore
 src/example.py:20:coverage:pragma: no cover
 src/main.cpp:8:clang-tidy:NOLINT
+src/lib.rs:4:clippy:allow
 ```
 
 **Count format** (`--count`):
@@ -109,10 +113,18 @@ src/main.cpp:8:clang-tidy:NOLINT
 - `NOLINTBEGIN`
 - `NOLINTNEXTLINE`
 
+### clippy (suppressions only)
+
+- `#[allow(clippy::...)]`
+- `#[expect(clippy::...)]`
+
 ### coverage
 
 - `pragma: no branch`
 - `pragma: no cover`
+- `#[coverage(off)]` (Rust)
+- `#[cfg(...)]`, `#[cfg_attr(...)]` and `cfg!(...)` whose predicate names
+  `coverage` or `coverage_nightly` (Rust)
 
 ### markdownlint (suppressions only)
 
@@ -136,6 +148,21 @@ src/main.cpp:8:clang-tidy:NOLINT
 - `pylint: disable-next`
 - `pylint: skip-file`
 
+### rustc (suppressions only)
+
+- `#[allow(LINT)]` and `#[expect(LINT)]` for a lint with no tool prefix
+
+### rustdoc (suppressions only)
+
+- `#[allow(rustdoc::...)]`
+- `#[expect(rustdoc::...)]`
+
+### rustfmt (suppressions only)
+
+- `#[rustfmt::skip]`
+- `#[rustfmt::skip::attributes(...)]`
+- `#[rustfmt::skip::macros(...)]`
+
 ### yamllint (suppressions only)
 
 - `yamllint disable`
@@ -144,12 +171,28 @@ src/main.cpp:8:clang-tidy:NOLINT
 
 ## Matching Behavior
 
-- Case-insensitive matching
+- A Rust directive is an attribute, so a `.rs` file is parsed with
+  `tree-sitter-rust` and its attributes read, rather than a pattern
+  matched in a comment:
+  - outer (`#[...]`) and inner (`#![...]`) attributes are both read,
+    and a finding is reported on the line the attribute starts on
+  - an attribute that names lints of several tools,
+    such as `#[allow(dead_code, clippy::pedantic)]`,
+    is reported once for each tool
+  - `#[cfg_attr(CONDITION, ATTRIBUTE, ...)]` is read through:
+    its condition as the predicate of a `cfg`,
+    and each wrapped attribute as though it stood alone
+  - `#[warn(...)]`, `#[deny(...)]` and `#[forbid(...)]`
+    are not reported, nor is `#[coverage(on)]`
+  - text in a string, raw string or comment is not an attribute
+    and is not reported
+- Case-insensitive matching (except Rust, whose attributes are
+  case-sensitive)
 - Tolerates extra whitespace (e.g., `pylint:  disable`, `type:   ignore`)
 - Only detects directives in comments
   (after `#` for Python/YAML,
   `//` and `/* */` for C/C++),
-  not in string literals
+  not in string literals (Rust is read by its grammar, above)
 - `clang-diagnostic` matches `#pragma`
   preprocessor directives on the full line
 - `markdownlint` matches `<!-- markdownlint-... -->`
@@ -173,8 +216,12 @@ src/main.cpp:8:clang-tidy:NOLINT
   - `clang-tidy`:
     `.c`, `.cc`, `.cpp`, `.cxx`,
     `.h`, `.hpp`, `.hxx`, `.m`, `.mm`
-  - `coverage`: `.py`, `.toml`
+  - `clippy`: `.rs`
+  - `coverage`: `.py`, `.toml`, `.rs`
   - `markdownlint`: `.md`
   - `mypy`: `.py`, `.toml`
   - `pylint`: `.py`, `.toml`
+  - `rustc`: `.rs`
+  - `rustdoc`: `.rs`
+  - `rustfmt`: `.rs`
   - `yamllint`: `.yaml`, `.yml`, `.toml`

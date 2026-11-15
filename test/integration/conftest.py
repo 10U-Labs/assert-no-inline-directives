@@ -6,6 +6,7 @@ from pathlib import Path
 import pytest
 from _pytest.capture import CaptureResult
 from test_run_main import run_main_with_args
+from test_rust_sample import SAMPLE_RS
 from test_write_files import write_files
 
 
@@ -193,3 +194,9 @@ def fixture_markdownlint_and_mypy_output(
     })
     args = ["--tools", "markdownlint,mypy", *paths]
     return run_and_capture(capsys, args).out
+
+
+@pytest.fixture(name="sample_path")
+def fixture_sample_path(tmp_path: Path) -> str:
+    """Path of the sample Rust file from issue 21."""
+    return write_files(tmp_path, {"sample.rs": SAMPLE_RS})[0]
