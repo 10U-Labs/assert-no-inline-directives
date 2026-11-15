@@ -36,6 +36,7 @@ SAMPLE_RS_FINDINGS = [
     "2:coverage:cfg_attr(coverage_nightly)",
     "4:clippy:allow",
     "7:rustc:expect",
+    "12:rustc:warn",
     "15:rustfmt:rustfmt::skip",
     "18:coverage:cfg_attr(coverage_nightly)",
     "21:coverage:cfg(coverage)",

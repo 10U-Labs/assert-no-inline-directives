@@ -156,7 +156,7 @@ RUST_ATTRIBUTE_NODES = frozenset({"attribute_item", "inner_attribute_item"})
 
 RUST_PATH_NODES = frozenset({"identifier", "::"})
 
-RUST_LINT_SILENCERS = frozenset({"allow", "expect"})
+RUST_LINT_LEVELS = frozenset({"allow", "deny", "expect", "forbid", "warn"})
 
 RUST_LINT_TOOLS = frozenset({"clippy", "rustdoc"})
 
@@ -281,15 +281,15 @@ def _is_rustfmt_skip(path: RustPath) -> bool:
 
 
 def _rust_lint_directives(
-    silencer: str,
+    level: str,
     arguments: Node,
     source: bytes,
 ) -> Iterator[tuple[str, str]]:
-    """Yield a finding for each tool whose lint allow or expect names."""
+    """Yield a finding for each tool whose lint a lint level names."""
     for segment in _rust_segments(arguments):
         lint, _ = _rust_meta(segment, source)
         if lint:
-            yield _rust_lint_tool(lint), silencer
+            yield _rust_lint_tool(lint), level
 
 
 def _rust_cfg_attr_directives(
@@ -322,7 +322,7 @@ def _rust_directives(
     if arguments is None:
         return
     name = path[0] if len(path) == 1 else None
-    if name in RUST_LINT_SILENCERS:
+    if name in RUST_LINT_LEVELS:
         yield from _rust_lint_directives(path[0], arguments, source)
     elif name == "coverage":
         if RUST_COVERAGE_OFF in _rust_names([arguments], source):

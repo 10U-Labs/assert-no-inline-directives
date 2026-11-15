@@ -38,7 +38,7 @@ assert-no-inline-directives --tools clang-tidy "**/*.cpp" "**/*.h"
 # Check for coverage pragmas
 assert-no-inline-directives --tools coverage src/
 
-# Check Rust attributes that silence lints, rustfmt or coverage
+# Check Rust attributes that set lint levels or silence rustfmt or coverage
 assert-no-inline-directives --tools clippy,coverage,rustc,rustdoc,rustfmt src/
 
 # Check for markdownlint suppressions in markdown files
@@ -113,10 +113,10 @@ src/lib.rs:4:clippy:allow
 - `NOLINTBEGIN`
 - `NOLINTNEXTLINE`
 
-### clippy (suppressions only)
+### clippy
 
-- `#[allow(clippy::...)]`
-- `#[expect(clippy::...)]`
+- `#[allow(clippy::...)]`, `#[expect(clippy::...)]`, `#[warn(clippy::...)]`,
+  `#[deny(clippy::...)]` and `#[forbid(clippy::...)]`
 
 ### coverage
 
@@ -148,14 +148,15 @@ src/lib.rs:4:clippy:allow
 - `pylint: disable-next`
 - `pylint: skip-file`
 
-### rustc (suppressions only)
+### rustc
 
-- `#[allow(LINT)]` and `#[expect(LINT)]` for a lint with no tool prefix
+- `#[allow(LINT)]`, `#[expect(LINT)]`, `#[warn(LINT)]`, `#[deny(LINT)]`
+  and `#[forbid(LINT)]` for a lint with no tool prefix
 
-### rustdoc (suppressions only)
+### rustdoc
 
-- `#[allow(rustdoc::...)]`
-- `#[expect(rustdoc::...)]`
+- `#[allow(rustdoc::...)]`, `#[expect(rustdoc::...)]`, `#[warn(rustdoc::...)]`,
+  `#[deny(rustdoc::...)]` and `#[forbid(rustdoc::...)]`
 
 ### rustfmt (suppressions only)
 
@@ -182,8 +183,10 @@ src/lib.rs:4:clippy:allow
   - `#[cfg_attr(CONDITION, ATTRIBUTE, ...)]` is read through:
     its condition as the predicate of a `cfg`,
     and each wrapped attribute as though it stood alone
-  - `#[warn(...)]`, `#[deny(...)]` and `#[forbid(...)]`
-    are not reported, nor is `#[coverage(on)]`
+  - every lint level is reported (`allow`, `expect`, `warn`, `deny`
+    and `forbid`), since a lint's level belongs in configuration,
+    not inline, in either direction
+  - `#[coverage(on)]` is not reported, as an "enable" directive
   - text in a string, raw string or comment is not an attribute
     and is not reported
 - Case-insensitive matching (except Rust, whose attributes are

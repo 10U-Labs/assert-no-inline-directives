@@ -27,7 +27,7 @@ class TestCliRustIntegration:
     def test_sample_reports_directive_lines(
         self, sample_path: str, capsys: pytest.CaptureFixture[str]
     ) -> None:
-        """The sample reports lines 1, 2, 4, 7, 15, 18 and 21 only."""
+        """The sample reports lines 1, 2, 4, 7, 12, 15, 18 and 21 only."""
         run_main_with_args(["--tools", SAMPLE_TOOLS, sample_path])
         captured = capsys.readouterr()
         expected = [f"{sample_path}:{line}" for line in SAMPLE_RS_FINDINGS]
@@ -50,7 +50,9 @@ class TestCliRustIntegration:
         args = ["--tools", "rustc", "--allow", "unused_variables", sample_path]
         run_main_with_args(args)
         captured = capsys.readouterr()
-        assert captured.out.splitlines() == [f"{sample_path}:1:rustc:allow"]
+        assert captured.out.splitlines() == [
+            f"{sample_path}:1:rustc:allow", f"{sample_path}:12:rustc:warn"
+        ]
 
     def test_rs_skipped_for_python_tools(
         self, sample_path: str, capsys: pytest.CaptureFixture[str]

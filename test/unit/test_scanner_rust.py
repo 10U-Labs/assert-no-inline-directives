@@ -40,7 +40,7 @@ class TestRustTools:
 
 @pytest.mark.unit
 class TestRustLints:
-    """Tests for allow and expect."""
+    """Tests for lint levels: allow, expect, warn, deny and forbid."""
 
     @pytest.mark.parametrize(("source", "expected"), [
         ("#[allow(dead_code)]\nfn f() {}\n", ["1:rustc:allow"]),
@@ -53,11 +53,18 @@ class TestRustLints:
          ["1:rustdoc:allow"]),
         ("#![expect(rustdoc::all)]\n", ["1:rustdoc:expect"]),
         ("fn f() {\n    #![allow(unused)]\n}\n", ["2:rustc:allow"]),
+        ("#[warn(missing_docs)]\nfn f() {}\n", ["1:rustc:warn"]),
+        ("#[deny(missing_docs)]\nfn f() {}\n", ["1:rustc:deny"]),
+        ("#![forbid(unsafe_code)]\n", ["1:rustc:forbid"]),
+        ("#![deny(clippy::pedantic)]\n", ["1:clippy:deny"]),
+        ("#[warn(rustdoc::all)]\nfn f() {}\n", ["1:rustdoc:warn"]),
+        ("#[cfg_attr(test, forbid(unsafe_code))]\nfn f() {}\n",
+         ["1:rustc:forbid"]),
     ])
-    def test_lint_silencer_reported(
+    def test_lint_level_reported(
         self, source: str, expected: list[str]
     ) -> None:
-        """allow and expect are reported for the tool whose lint they name."""
+        """Each lint level is reported for the tool whose lint it names."""
         assert rust_findings(source) == expected
 
     def test_two_tools_reported_once_each(self) -> None:
@@ -73,11 +80,11 @@ class TestRustLints:
         ]
 
     def test_empty_allow_not_reported(self) -> None:
-        """An allow that names no lint silences nothing."""
+        """An allow that names no lint sets no level."""
         assert not rust_findings("#[allow()]\nfn f() {}\n")
 
     def test_allow_without_arguments_not_reported(self) -> None:
-        """An allow with no arguments silences nothing."""
+        """An allow with no arguments sets no level."""
         assert not rust_findings("#[allow]\nfn f() {}\n")
 
 
@@ -182,16 +189,13 @@ class TestRustNotReported:
         'const R: &str = r#"#[rustfmt::skip]"#;\n',
         "// #[allow(dead_code)]\n",
         "/* #[cfg(coverage)] */\n",
-        "#[warn(missing_docs)]\nfn f() {}\n",
-        "#[deny(missing_docs)]\nfn f() {}\n",
-        "#![forbid(unsafe_code)]\n",
         "#[cfg(test)]\nmod tests {}\n",
         "#[derive(Debug)]\nstruct S;\n",
         "#[doc = \"allow\"]\nfn f() {}\n",
         "#[must_use]\nfn f() -> u8 { 0 }\n",
     ])
     def test_not_reported(self, source: str) -> None:
-        """Strings, comments, level-raising and other attributes are clean."""
+        """Strings, comments and attributes that set no lint level are clean."""
         assert not rust_findings(source)
 
     def test_attribute_below_lifetime_reported(self) -> None:
