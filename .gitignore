@@ -1,11 +1,9 @@
-__pycache__/
 *.egg-info/
-.venv/
-.pytest_cache/
-.coverage
-htmlcov/
-dist/
-build/
-
-# Machine-specific Claude Code settings (absolute autoMemoryDirectory)
 .claude/settings.local.json
+.coverage
+.pytest_cache/
+.venv/
+__pycache__/
+build/
+dist/
+htmlcov/
