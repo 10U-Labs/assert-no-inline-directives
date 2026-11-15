@@ -654,8 +654,30 @@ def scan_file(
     extension = os.path.splitext(path)[1].lower()
     if extension in RUST_EXTENSIONS:
         return _scan_rust_file(path, content, tools, allow_patterns)
-    is_c_family = extension in C_EXTENSIONS
+    return _scan_comment_file(
+        path, content, tools, allow_patterns, extension in C_EXTENSIONS,
+    )
 
+
+def _scan_comment_file(
+    path: str,
+    content: str,
+    tools: frozenset[str],
+    allow_patterns: list[str],
+    is_c_family: bool,
+) -> list[Finding]:
+    """Scan a file whose directives are comments or line-based patterns.
+
+    Args:
+        path: The file path (used for reporting).
+        content: The file content to scan.
+        tools: Set of tools to check.
+        allow_patterns: List of patterns to allow (skip matching directives).
+        is_c_family: Whether the file uses C-style comments.
+
+    Returns:
+        A list of Finding objects for each directive found.
+    """
     findings: list[Finding] = []
     in_string: str | None = None
     in_block_comment: bool = False

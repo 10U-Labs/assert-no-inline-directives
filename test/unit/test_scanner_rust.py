@@ -206,8 +206,8 @@ class TestRustNotReported:
 
 
 @pytest.mark.unit
-class TestRustAllowPatterns:
-    """Tests for --allow against Rust lines."""
+class TestRustFiles:
+    """Tests for --allow against Rust lines and the sample from issue 21."""
 
     def test_allow_pattern_skips_line(self) -> None:
         """A line matching an allow pattern is not reported."""
@@ -215,11 +215,6 @@ class TestRustAllowPatterns:
         assert rust_findings(source, allow_patterns=["dead_code"]) == [
             "3:rustc:allow"
         ]
-
-
-@pytest.mark.unit
-class TestRustSample:
-    """Tests over the sample file from issue 21."""
 
     def test_sample_findings(self) -> None:
         """The sample reports exactly its directive lines."""
