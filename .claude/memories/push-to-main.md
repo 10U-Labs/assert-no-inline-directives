@@ -1,11 +1,11 @@
 ---
-name: we-push-to-main
+name: push-to-main
 description: Commits go straight to main with git push; no feature branches or pull requests
 metadata:
   type: feedback
 ---
 
-We push to main: commit on `main` and `git push origin main`, without opening a feature branch or a pull request.
+Commit on `main` and push with `git push origin main`, without opening a feature branch or a pull request.
 
 **Why:** The user said so, matching the sibling 10U-Labs repos, which commit straight to main.
 

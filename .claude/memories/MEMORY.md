@@ -1,1 +1,1 @@
-- [We push to main](we-push-to-main.md) — commit and push straight to main, no branches or PRs
+- [Push to main](push-to-main.md) — commit and push straight to main, no branches or PRs
