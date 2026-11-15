@@ -68,6 +68,7 @@ jobs:
           src
           --search-in src
           --search-in test
+          --search-in lib
           --verbose
   e2e-tests:
     runs-on: ubuntu-latest
@@ -81,7 +82,9 @@ jobs:
       - name: Install dependencies
         run: pip install pytest -e .
       - name: E2E tests
-        run: python3 -m pytest test/e2e/ --verbose --pythonwarnings=error
+        run: >-
+          PYTHONPATH=lib
+          python3 -m pytest test/e2e/ --verbose --pythonwarnings=error
   integration-tests:
     runs-on: ubuntu-latest
     steps:
@@ -95,7 +98,7 @@ jobs:
         run: pip install pytest pytest-cov -e .
       - name: Integration tests
         run: |
-          python3 -m pytest test/integration/ \
+          PYTHONPATH=lib python3 -m pytest test/integration/ \
             --verbose --pythonwarnings=error \
             --cov=assert_no_inline_directives \
             --cov-report=term-missing \
@@ -125,7 +128,9 @@ jobs:
       - name: Install dependencies
         run: npm install -g jscpd
       - name: jscpd (test)
-        run: jscpd --pattern "**/*.py" --threshold 0 --reporters console test/
+        run: >-
+          jscpd --pattern "**/*.py" --threshold 0 --reporters console
+          test/ lib/
   mypy-src:
     runs-on: ubuntu-latest
     steps:
@@ -151,7 +156,9 @@ jobs:
       - name: Install dependencies
         run: pip install mypy pytest -e .
       - name: mypy (test)
-        run: python3 -m mypy test/
+        run: >-
+          MYPYPATH=lib
+          python3 -m mypy --explicit-package-bases test/ lib/
   pylint-src:
     runs-on: ubuntu-latest
     steps:
@@ -181,7 +188,8 @@ jobs:
         run: pip install pylint pytest -e .
       - name: pylint (test)
         run: >-
-          python3 -m pylint test/
+          PYTHONPATH=lib
+          python3 -m pylint --recursive=y test/ lib/
           --fail-on=C,R,W
           --fail-under=10.0
           --max-module-lines=1500
@@ -252,7 +260,7 @@ jobs:
         run: pip install pytest pytest-cov -e .
       - name: Unit tests
         run: |
-          python3 -m pytest test/unit/ \
+          PYTHONPATH=lib python3 -m pytest test/unit/ \
             --verbose --pythonwarnings=error \
             --cov=assert_no_inline_directives \
             --cov-report=term-missing \
@@ -288,5 +296,6 @@ on:
       - ".github/workflows/release.yml"
       - "action.yml"
       - "pyproject.toml"
+      - "lib/**"
       - "src/**"
       - "test/**"

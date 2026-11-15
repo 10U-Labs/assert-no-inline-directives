@@ -3,8 +3,7 @@
 from pathlib import Path
 
 import pytest
-
-from .conftest import run_cli
+from test_run_cli import run_cli
 
 
 # --- clang-tidy e2e tests ---

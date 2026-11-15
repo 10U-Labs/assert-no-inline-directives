@@ -4,8 +4,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-
-from ..conftest import run_main_with_args
+from test_run_main import run_main_with_args
 
 
 @pytest.mark.integration
@@ -195,36 +194,16 @@ class TestCliClangExtensionFiltering:
         assert exit_code == 1
 
     def test_combined_clang_and_python_tools(
-        self, tmp_path: Path, capsys: Any
+        self, clang_tidy_and_mypy_output: str
     ) -> None:
         """Combined clang and Python tools scan appropriate files."""
-        cpp_file = tmp_path / "test.cpp"
-        py_file = tmp_path / "test.py"
-        cpp_file.write_text("int x = 1; // NOLINT\n")
-        py_file.write_text("x = 1  # type: ignore\n")
-        run_main_with_args([
-            "--tools", "clang-tidy,mypy",
-            str(cpp_file),
-            str(py_file),
-        ])
-        captured = capsys.readouterr()
-        assert "NOLINT" in captured.out
+        assert "NOLINT" in clang_tidy_and_mypy_output
 
     def test_combined_clang_and_python_tools_mypy(
-        self, tmp_path: Path, capsys: Any
+        self, clang_tidy_and_mypy_output: str
     ) -> None:
         """Combined clang and Python tools detect mypy in .py files."""
-        cpp_file = tmp_path / "test.cpp"
-        py_file = tmp_path / "test.py"
-        cpp_file.write_text("int x = 1; // NOLINT\n")
-        py_file.write_text("x = 1  # type: ignore\n")
-        run_main_with_args([
-            "--tools", "clang-tidy,mypy",
-            str(cpp_file),
-            str(py_file),
-        ])
-        captured = capsys.readouterr()
-        assert "type: ignore" in captured.out
+        assert "type: ignore" in clang_tidy_and_mypy_output
 
 
 @pytest.mark.integration

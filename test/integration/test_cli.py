@@ -4,8 +4,8 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-
-from ..conftest import run_main_with_args
+from _pytest.capture import CaptureResult
+from test_run_main import run_main_with_args
 
 
 @pytest.mark.integration
@@ -126,49 +126,22 @@ class TestCliMultipleFiles:
         assert exit_code == 0
 
     def test_findings_across_files_count(
-        self,
-        tmp_path: Path,
-        capsys: Any,
+        self, two_file_finding_lines: list[str]
     ) -> None:
         """Findings from multiple files are all reported."""
-        file1 = tmp_path / "a.py"
-        file2 = tmp_path / "b.py"
-        file1.write_text("x = 1  # type: ignore\n")
-        file2.write_text("# pylint: disable=foo\n")
-        run_main_with_args(["--tools", "pylint,mypy", str(file1), str(file2)])
-        captured = capsys.readouterr()
-        lines = captured.out.strip().split("\n")
-        assert len(lines) == 2
+        assert len(two_file_finding_lines) == 2
 
     def test_findings_across_files_first_file(
-        self,
-        tmp_path: Path,
-        capsys: Any,
+        self, two_file_finding_lines: list[str]
     ) -> None:
         """First file finding is reported first."""
-        file1 = tmp_path / "a.py"
-        file2 = tmp_path / "b.py"
-        file1.write_text("x = 1  # type: ignore\n")
-        file2.write_text("# pylint: disable=foo\n")
-        run_main_with_args(["--tools", "pylint,mypy", str(file1), str(file2)])
-        captured = capsys.readouterr()
-        lines = captured.out.strip().split("\n")
-        assert "a.py" in lines[0]
+        assert "a.py" in two_file_finding_lines[0]
 
     def test_findings_across_files_second_file(
-        self,
-        tmp_path: Path,
-        capsys: Any,
+        self, two_file_finding_lines: list[str]
     ) -> None:
         """Second file finding is reported second."""
-        file1 = tmp_path / "a.py"
-        file2 = tmp_path / "b.py"
-        file1.write_text("x = 1  # type: ignore\n")
-        file2.write_text("# pylint: disable=foo\n")
-        run_main_with_args(["--tools", "pylint,mypy", str(file1), str(file2)])
-        captured = capsys.readouterr()
-        lines = captured.out.strip().split("\n")
-        assert "b.py" in lines[1]
+        assert "b.py" in two_file_finding_lines[1]
 
 
 @pytest.mark.integration
@@ -233,38 +206,16 @@ class TestCliExclude:
         assert exit_code == 0
 
     def test_exclude_multiple_patterns_includes_test(
-        self, tmp_path: Path, capsys: Any
+        self, exclude_vendor_output: str
     ) -> None:
         """Multiple exclude patterns include non-excluded file."""
-        file1 = tmp_path / "test.py"
-        file2 = tmp_path / "vendor.py"
-        file1.write_text("x = 1  # type: ignore\n")
-        file2.write_text("y = 2  # type: ignore\n")
-        run_main_with_args([
-            "--tools", "mypy",
-            "--exclude", "*vendor*",
-            str(file1),
-            str(file2),
-        ])
-        captured = capsys.readouterr()
-        assert "test.py" in captured.out
+        assert "test.py" in exclude_vendor_output
 
     def test_exclude_multiple_patterns_excludes_vendor(
-        self, tmp_path: Path, capsys: Any
+        self, exclude_vendor_output: str
     ) -> None:
         """Multiple exclude patterns exclude vendor file."""
-        file1 = tmp_path / "test.py"
-        file2 = tmp_path / "vendor.py"
-        file1.write_text("x = 1  # type: ignore\n")
-        file2.write_text("y = 2  # type: ignore\n")
-        run_main_with_args([
-            "--tools", "mypy",
-            "--exclude", "*vendor*",
-            str(file1),
-            str(file2),
-        ])
-        captured = capsys.readouterr()
-        assert "vendor.py" not in captured.out
+        assert "vendor.py" not in exclude_vendor_output
 
 
 @pytest.mark.integration
@@ -391,61 +342,22 @@ class TestCliAllow:
         assert exit_code == 0
 
     def test_allow_multiple_patterns_count(
-        self, tmp_path: Path, capsys: Any
+        self, allow_multiple_lines: list[str]
     ) -> None:
         """Multiple allow patterns - only non-allowed finding reported."""
-        test_file = tmp_path / "test.py"
-        test_file.write_text(
-            "# pylint: disable=too-many-arguments\n"
-            "x = 1  # type: ignore[import]\n"
-            "y = 2  # type: ignore\n"
-        )
-        run_main_with_args([
-            "--tools", "pylint,mypy",
-            "--allow", "type: ignore[import],too-many-arguments",
-            str(test_file),
-        ])
-        captured = capsys.readouterr()
-        lines = captured.out.strip().split("\n")
-        assert len(lines) == 1
+        assert len(allow_multiple_lines) == 1
 
     def test_allow_multiple_patterns_content(
-        self, tmp_path: Path, capsys: Any
+        self, allow_multiple_lines: list[str]
     ) -> None:
         """Multiple allow patterns - correct finding is reported."""
-        test_file = tmp_path / "test.py"
-        test_file.write_text(
-            "# pylint: disable=too-many-arguments\n"
-            "x = 1  # type: ignore[import]\n"
-            "y = 2  # type: ignore\n"
-        )
-        run_main_with_args([
-            "--tools", "pylint,mypy",
-            "--allow", "type: ignore[import],too-many-arguments",
-            str(test_file),
-        ])
-        captured = capsys.readouterr()
-        lines = captured.out.strip().split("\n")
-        assert "type: ignore" in lines[0]
+        assert "type: ignore" in allow_multiple_lines[0]
 
     def test_allow_multiple_patterns_excludes_import(
-        self, tmp_path: Path, capsys: Any
+        self, allow_multiple_lines: list[str]
     ) -> None:
         """Multiple allow patterns - import variant not in output."""
-        test_file = tmp_path / "test.py"
-        test_file.write_text(
-            "# pylint: disable=too-many-arguments\n"
-            "x = 1  # type: ignore[import]\n"
-            "y = 2  # type: ignore\n"
-        )
-        run_main_with_args([
-            "--tools", "pylint,mypy",
-            "--allow", "type: ignore[import],too-many-arguments",
-            str(test_file),
-        ])
-        captured = capsys.readouterr()
-        lines = captured.out.strip().split("\n")
-        assert "[import]" not in lines[0]
+        assert "[import]" not in allow_multiple_lines[0]
 
 
 @pytest.mark.integration
@@ -465,151 +377,39 @@ class TestCliExtensionFiltering:
         ])
         assert exit_code == 1  # Only py_file should be scanned
 
-    def test_pylint_only_scans_py_includes(
-        self, tmp_path: Path, capsys: Any
-    ) -> None:
+    def test_pylint_only_scans_py_includes(self, pylint_py_yaml_output: str) -> None:
         """Pylint linter includes .py files."""
-        py_file = tmp_path / "test.py"
-        yaml_file = tmp_path / "test.yaml"
-        py_file.write_text("# pylint: disable=foo\n")
-        yaml_file.write_text("# pylint: disable=foo\n")
-        run_main_with_args([
-            "--tools", "pylint",
-            str(py_file),
-            str(yaml_file),
-        ])
-        captured = capsys.readouterr()
-        assert "test.py" in captured.out
+        assert "test.py" in pylint_py_yaml_output
 
     def test_pylint_only_scans_py_excludes_yaml(
-        self, tmp_path: Path, capsys: Any
+        self, pylint_py_yaml_output: str
     ) -> None:
         """Pylint linter excludes yaml files."""
-        py_file = tmp_path / "test.py"
-        yaml_file = tmp_path / "test.yaml"
-        py_file.write_text("# pylint: disable=foo\n")
-        yaml_file.write_text("# pylint: disable=foo\n")
-        run_main_with_args([
-            "--tools", "pylint",
-            str(py_file),
-            str(yaml_file),
-        ])
-        captured = capsys.readouterr()
-        assert "test.yaml" not in captured.out
+        assert "test.yaml" not in pylint_py_yaml_output
 
-    def test_yamllint_only_scans_yaml(self, tmp_path: Path, capsys: Any) -> None:
+    def test_yamllint_only_scans_yaml(self, yamllint_output: str) -> None:
         """Yamllint linter scans .yaml files."""
-        yaml_file = tmp_path / "test.yaml"
-        yml_file = tmp_path / "test.yml"
-        py_file = tmp_path / "test.py"
-        yaml_file.write_text("# yamllint disable\n")
-        yml_file.write_text("# yamllint disable\n")
-        py_file.write_text("# yamllint disable\n")
-        run_main_with_args([
-            "--tools", "yamllint",
-            str(yaml_file),
-            str(yml_file),
-            str(py_file),
-        ])
-        captured = capsys.readouterr()
-        assert "test.yaml" in captured.out
+        assert "test.yaml" in yamllint_output
 
-    def test_yamllint_only_scans_yml(self, tmp_path: Path, capsys: Any) -> None:
+    def test_yamllint_only_scans_yml(self, yamllint_output: str) -> None:
         """Yamllint linter scans .yml files."""
-        yaml_file = tmp_path / "test.yaml"
-        yml_file = tmp_path / "test.yml"
-        py_file = tmp_path / "test.py"
-        yaml_file.write_text("# yamllint disable\n")
-        yml_file.write_text("# yamllint disable\n")
-        py_file.write_text("# yamllint disable\n")
-        run_main_with_args([
-            "--tools", "yamllint",
-            str(yaml_file),
-            str(yml_file),
-            str(py_file),
-        ])
-        captured = capsys.readouterr()
-        assert "test.yml" in captured.out
+        assert "test.yml" in yamllint_output
 
-    def test_yamllint_excludes_py(self, tmp_path: Path, capsys: Any) -> None:
+    def test_yamllint_excludes_py(self, yamllint_output: str) -> None:
         """Yamllint linter excludes .py files."""
-        yaml_file = tmp_path / "test.yaml"
-        yml_file = tmp_path / "test.yml"
-        py_file = tmp_path / "test.py"
-        yaml_file.write_text("# yamllint disable\n")
-        yml_file.write_text("# yamllint disable\n")
-        py_file.write_text("# yamllint disable\n")
-        run_main_with_args([
-            "--tools", "yamllint",
-            str(yaml_file),
-            str(yml_file),
-            str(py_file),
-        ])
-        captured = capsys.readouterr()
-        assert "test.py" not in captured.out
+        assert "test.py" not in yamllint_output
 
-    def test_combined_linters_scan_py(
-        self,
-        tmp_path: Path,
-        capsys: Any,
-    ) -> None:
+    def test_combined_linters_scan_py(self, combined_linters_output: str) -> None:
         """Combined linters scan .py files."""
-        py_file = tmp_path / "test.py"
-        yaml_file = tmp_path / "test.yaml"
-        txt_file = tmp_path / "test.txt"
-        py_file.write_text("# pylint: disable=foo\n")
-        yaml_file.write_text("# yamllint disable\n")
-        txt_file.write_text("# pylint: disable=foo\n")
-        run_main_with_args([
-            "--tools", "pylint,yamllint",
-            str(py_file),
-            str(yaml_file),
-            str(txt_file),
-        ])
-        captured = capsys.readouterr()
-        assert "test.py" in captured.out
+        assert "test.py" in combined_linters_output
 
-    def test_combined_linters_scan_yaml(
-        self,
-        tmp_path: Path,
-        capsys: Any,
-    ) -> None:
+    def test_combined_linters_scan_yaml(self, combined_linters_output: str) -> None:
         """Combined linters scan .yaml files."""
-        py_file = tmp_path / "test.py"
-        yaml_file = tmp_path / "test.yaml"
-        txt_file = tmp_path / "test.txt"
-        py_file.write_text("# pylint: disable=foo\n")
-        yaml_file.write_text("# yamllint disable\n")
-        txt_file.write_text("# pylint: disable=foo\n")
-        run_main_with_args([
-            "--tools", "pylint,yamllint",
-            str(py_file),
-            str(yaml_file),
-            str(txt_file),
-        ])
-        captured = capsys.readouterr()
-        assert "test.yaml" in captured.out
+        assert "test.yaml" in combined_linters_output
 
-    def test_combined_linters_exclude_txt(
-        self,
-        tmp_path: Path,
-        capsys: Any,
-    ) -> None:
+    def test_combined_linters_exclude_txt(self, combined_linters_output: str) -> None:
         """Combined linters exclude .txt files."""
-        py_file = tmp_path / "test.py"
-        yaml_file = tmp_path / "test.yaml"
-        txt_file = tmp_path / "test.txt"
-        py_file.write_text("# pylint: disable=foo\n")
-        yaml_file.write_text("# yamllint disable\n")
-        txt_file.write_text("# pylint: disable=foo\n")
-        run_main_with_args([
-            "--tools", "pylint,yamllint",
-            str(py_file),
-            str(yaml_file),
-            str(txt_file),
-        ])
-        captured = capsys.readouterr()
-        assert "test.txt" not in captured.out
+        assert "test.txt" not in combined_linters_output
 
     def test_case_insensitive_extension(self, tmp_path: Path, capsys: Any) -> None:
         """Extension matching is case-insensitive."""
@@ -687,64 +487,28 @@ class TestCliVerbose:
         assert "Scanned 1 file(s), found 1 finding(s)" in out
 
     def test_verbose_fail_fast_shows_first_file(
-        self, tmp_path: Path, capsys: Any
+        self, verbose_fail_fast_output: str
     ) -> None:
         """Verbose with fail-fast shows first file."""
-        file1 = tmp_path / "first.py"
-        file1.write_text("# pylint: disable=one\n")
-        file2 = tmp_path / "second.py"
-        file2.write_text("# pylint: disable=two\n")
-        run_main_with_args([
-            "--tools", "pylint", "--verbose", "--fail-fast",
-            str(file1), str(file2),
-        ])
-        out = capsys.readouterr().out
-        assert "first.py" in out
+        assert "first.py" in verbose_fail_fast_output
 
     def test_verbose_fail_fast_shows_finding(
-        self, tmp_path: Path, capsys: Any
+        self, verbose_fail_fast_output: str
     ) -> None:
         """Verbose with fail-fast shows finding."""
-        file1 = tmp_path / "first.py"
-        file1.write_text("# pylint: disable=one\n")
-        file2 = tmp_path / "second.py"
-        file2.write_text("# pylint: disable=two\n")
-        run_main_with_args([
-            "--tools", "pylint", "--verbose", "--fail-fast",
-            str(file1), str(file2),
-        ])
-        out = capsys.readouterr().out
-        assert "pylint: disable" in out
+        assert "pylint: disable" in verbose_fail_fast_output
 
     def test_verbose_fail_fast_excludes_second_file(
-        self, tmp_path: Path, capsys: Any
+        self, verbose_fail_fast_output: str
     ) -> None:
         """Verbose with fail-fast excludes second file."""
-        file1 = tmp_path / "first.py"
-        file1.write_text("# pylint: disable=one\n")
-        file2 = tmp_path / "second.py"
-        file2.write_text("# pylint: disable=two\n")
-        run_main_with_args([
-            "--tools", "pylint", "--verbose", "--fail-fast",
-            str(file1), str(file2),
-        ])
-        out = capsys.readouterr().out
-        assert "second.py" not in out
+        assert "second.py" not in verbose_fail_fast_output
 
     def test_verbose_fail_fast_shows_one_finding_summary(
-        self, tmp_path: Path, capsys: Any
+        self, verbose_fail_fast_output: str
     ) -> None:
         """Verbose with fail-fast shows one finding in summary."""
-        file1 = tmp_path / "first.py"
-        file1.write_text("# pylint: disable=one\n")
-        file2 = tmp_path / "second.py"
-        file2.write_text("# pylint: disable=two\n")
-        run_main_with_args([
-            "--tools", "pylint", "--verbose", "--fail-fast",
-            str(file1), str(file2),
-        ])
-        out = capsys.readouterr().out
-        assert "found 1 finding" in out
+        assert "found 1 finding" in verbose_fail_fast_output
 
 
 @pytest.mark.integration
@@ -989,48 +753,16 @@ class TestCliDirectoryHandling:
             unreadable.chmod(0o644)
 
     def test_unreadable_file_in_directory_error_message(
-        self,
-        tmp_path: Path,
-        capsys: Any,
+        self, unreadable_in_directory: CaptureResult[str]
     ) -> None:
         """Unreadable file in directory shows error message."""
-        subdir = tmp_path / "subdir"
-        subdir.mkdir()
-        unreadable = subdir / "unreadable.py"
-        unreadable.write_text("content\n")
-        unreadable.chmod(0o000)
-        readable = subdir / "readable.py"
-        readable.write_text("x = 1  # type: ignore\n")
-        try:
-            run_main_with_args([
-                "--tools", "mypy", str(subdir)
-            ])
-            captured = capsys.readouterr()
-            assert "Error reading" in captured.err
-        finally:
-            unreadable.chmod(0o644)
+        assert "Error reading" in unreadable_in_directory.err
 
     def test_unreadable_file_in_directory_continues_scanning(
-        self,
-        tmp_path: Path,
-        capsys: Any,
+        self, unreadable_in_directory: CaptureResult[str]
     ) -> None:
         """Unreadable file in directory continues scanning other files."""
-        subdir = tmp_path / "subdir"
-        subdir.mkdir()
-        unreadable = subdir / "unreadable.py"
-        unreadable.write_text("content\n")
-        unreadable.chmod(0o000)
-        readable = subdir / "readable.py"
-        readable.write_text("x = 1  # type: ignore\n")
-        try:
-            run_main_with_args([
-                "--tools", "mypy", str(subdir)
-            ])
-            captured = capsys.readouterr()
-            assert "type: ignore" in captured.out
-        finally:
-            unreadable.chmod(0o644)
+        assert "type: ignore" in unreadable_in_directory.out
 
 
 @pytest.mark.integration
@@ -1054,43 +786,22 @@ class TestCliGlobPatterns:
         assert exit_code == 1
 
     def test_glob_expands_and_scans_multiple_files_includes_alpha(
-        self, tmp_path: Path, capsys: Any
+        self, glob_three_files_output: str
     ) -> None:
         """Glob pattern includes alpha.py."""
-        (tmp_path / "alpha.py").write_text("a = 1  # type: ignore\n")
-        (tmp_path / "beta.py").write_text("b = 2  # type: ignore\n")
-        (tmp_path / "gamma.py").write_text("clean code\n")
-        run_main_with_args([
-            "--tools", "mypy", str(tmp_path / "*.py")
-        ])
-        output = capsys.readouterr().out
-        assert "alpha.py" in output
+        assert "alpha.py" in glob_three_files_output
 
     def test_glob_expands_and_scans_multiple_files_includes_beta(
-        self, tmp_path: Path, capsys: Any
+        self, glob_three_files_output: str
     ) -> None:
         """Glob pattern includes beta.py."""
-        (tmp_path / "alpha.py").write_text("a = 1  # type: ignore\n")
-        (tmp_path / "beta.py").write_text("b = 2  # type: ignore\n")
-        (tmp_path / "gamma.py").write_text("clean code\n")
-        run_main_with_args([
-            "--tools", "mypy", str(tmp_path / "*.py")
-        ])
-        output = capsys.readouterr().out
-        assert "beta.py" in output
+        assert "beta.py" in glob_three_files_output
 
     def test_glob_expands_and_scans_multiple_files_excludes_clean(
-        self, tmp_path: Path, capsys: Any
+        self, glob_three_files_output: str
     ) -> None:
         """Glob pattern excludes gamma.py (no finding)."""
-        (tmp_path / "alpha.py").write_text("a = 1  # type: ignore\n")
-        (tmp_path / "beta.py").write_text("b = 2  # type: ignore\n")
-        (tmp_path / "gamma.py").write_text("clean code\n")
-        run_main_with_args([
-            "--tools", "mypy", str(tmp_path / "*.py")
-        ])
-        output = capsys.readouterr().out
-        assert "gamma.py" not in output  # No finding in clean file
+        assert "gamma.py" not in glob_three_files_output
 
     def test_glob_matching_directory_expands_contents_exit_code(
         self, tmp_path: Path
@@ -1129,33 +840,13 @@ class TestCliGlobPatterns:
         ])
         assert exit_code == 1
 
-    def test_recursive_glob_finds_root_file(
-        self, tmp_path: Path, capsys: Any
-    ) -> None:
+    def test_recursive_glob_finds_root_file(self, recursive_glob_output: str) -> None:
         """Recursive ** glob finds root file."""
-        nested = tmp_path / "src" / "pkg" / "subpkg"
-        nested.mkdir(parents=True)
-        (nested / "module.py").write_text("# pylint: disable=all\n")
-        (tmp_path / "root.py").write_text("# pylint: disable=all\n")
-        run_main_with_args([
-            "--tools", "pylint", str(tmp_path / "**" / "*.py")
-        ])
-        output = capsys.readouterr().out
-        assert "root.py" in output
+        assert "root.py" in recursive_glob_output
 
-    def test_recursive_glob_finds_nested_file(
-        self, tmp_path: Path, capsys: Any
-    ) -> None:
+    def test_recursive_glob_finds_nested_file(self, recursive_glob_output: str) -> None:
         """Recursive ** glob finds nested file."""
-        nested = tmp_path / "src" / "pkg" / "subpkg"
-        nested.mkdir(parents=True)
-        (nested / "module.py").write_text("# pylint: disable=all\n")
-        (tmp_path / "root.py").write_text("# pylint: disable=all\n")
-        run_main_with_args([
-            "--tools", "pylint", str(tmp_path / "**" / "*.py")
-        ])
-        output = capsys.readouterr().out
-        assert "module.py" in output
+        assert "module.py" in recursive_glob_output
 
     def test_nonexistent_glob_pattern_reports_error_exit_code(
         self, tmp_path: Path

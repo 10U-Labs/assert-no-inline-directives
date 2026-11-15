@@ -13,10 +13,9 @@ from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
+from test_run_main import run_main_with_args
 
 from assert_no_inline_directives.scanner import Finding
-
-from ..conftest import run_main_with_args
 
 
 def create_mock_finding(path: str, line: int, tool: str, directive: str) -> Finding:

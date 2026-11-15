@@ -1,10 +1,10 @@
 """End-to-end tests for the CLI tool."""
 
+import subprocess
 from pathlib import Path
 
 import pytest
-
-from .conftest import run_cli
+from test_run_cli import run_cli
 
 
 @pytest.mark.e2e
@@ -411,67 +411,29 @@ class TestExcludeFlag:
         result = run_cli("--tools", "mypy", "--exclude", "*vendor*", str(test_file))
         assert result.returncode == 0
 
-    def test_exclude_multiple_patterns_returncode(self, tmp_path: Path) -> None:
+    def test_exclude_multiple_patterns_returncode(
+        self, exclude_two_patterns_result: subprocess.CompletedProcess[str]
+    ) -> None:
         """Multiple exclude patterns - exits 1 for non-excluded."""
-        file1 = tmp_path / "test.py"
-        file2 = tmp_path / "vendor.py"
-        file3 = tmp_path / "generated.py"
-        file1.write_text("x = 1  # type: ignore\n")
-        file2.write_text("y = 2  # type: ignore\n")
-        file3.write_text("z = 3  # type: ignore\n")
-        result = run_cli(
-            "--tools", "mypy",
-            "--exclude", "*vendor*,*generated*",
-            str(file1), str(file2), str(file3),
-        )
-        assert result.returncode == 1
+        assert exclude_two_patterns_result.returncode == 1
 
-    def test_exclude_multiple_patterns_includes_test(self, tmp_path: Path) -> None:
+    def test_exclude_multiple_patterns_includes_test(
+        self, exclude_two_patterns_result: subprocess.CompletedProcess[str]
+    ) -> None:
         """Multiple exclude patterns includes non-excluded file."""
-        file1 = tmp_path / "test.py"
-        file2 = tmp_path / "vendor.py"
-        file3 = tmp_path / "generated.py"
-        file1.write_text("x = 1  # type: ignore\n")
-        file2.write_text("y = 2  # type: ignore\n")
-        file3.write_text("z = 3  # type: ignore\n")
-        result = run_cli(
-            "--tools", "mypy",
-            "--exclude", "*vendor*,*generated*",
-            str(file1), str(file2), str(file3),
-        )
-        assert "test.py" in result.stdout
+        assert "test.py" in exclude_two_patterns_result.stdout
 
-    def test_exclude_multiple_patterns_excludes_vendor(self, tmp_path: Path) -> None:
+    def test_exclude_multiple_patterns_excludes_vendor(
+        self, exclude_two_patterns_result: subprocess.CompletedProcess[str]
+    ) -> None:
         """Multiple exclude patterns excludes vendor file."""
-        file1 = tmp_path / "test.py"
-        file2 = tmp_path / "vendor.py"
-        file3 = tmp_path / "generated.py"
-        file1.write_text("x = 1  # type: ignore\n")
-        file2.write_text("y = 2  # type: ignore\n")
-        file3.write_text("z = 3  # type: ignore\n")
-        result = run_cli(
-            "--tools", "mypy",
-            "--exclude", "*vendor*,*generated*",
-            str(file1), str(file2), str(file3),
-        )
-        assert "vendor.py" not in result.stdout
+        assert "vendor.py" not in exclude_two_patterns_result.stdout
 
     def test_exclude_multiple_patterns_excludes_generated(
-        self, tmp_path: Path
+        self, exclude_two_patterns_result: subprocess.CompletedProcess[str]
     ) -> None:
         """Multiple exclude patterns excludes generated file."""
-        file1 = tmp_path / "test.py"
-        file2 = tmp_path / "vendor.py"
-        file3 = tmp_path / "generated.py"
-        file1.write_text("x = 1  # type: ignore\n")
-        file2.write_text("y = 2  # type: ignore\n")
-        file3.write_text("z = 3  # type: ignore\n")
-        result = run_cli(
-            "--tools", "mypy",
-            "--exclude", "*vendor*,*generated*",
-            str(file1), str(file2), str(file3),
-        )
-        assert "generated.py" not in result.stdout
+        assert "generated.py" not in exclude_two_patterns_result.stdout
 
 
 @pytest.mark.e2e
@@ -953,52 +915,23 @@ class TestDirectoryHandling:
         result = run_cli("--tools", "mypy", str(subdir))
         assert result.returncode == 0
 
-    def test_unreadable_file_in_directory_returncode(self, tmp_path: Path) -> None:
+    def test_unreadable_file_in_directory_returncode(
+        self, unreadable_in_directory_result: subprocess.CompletedProcess[str]
+    ) -> None:
         """Unreadable file in directory causes findings to still report."""
-        subdir = tmp_path / "subdir"
-        subdir.mkdir()
-        unreadable = subdir / "unreadable.py"
-        unreadable.write_text("clean\n")
-        unreadable.chmod(0o000)
-        readable = subdir / "readable.py"
-        readable.write_text("# pylint: disable=foo\n")
-        try:
-            result = run_cli("--tools", "pylint", str(subdir))
-            assert result.returncode == 1
-        finally:
-            unreadable.chmod(0o644)
+        assert unreadable_in_directory_result.returncode == 1
 
-    def test_unreadable_file_in_directory_error_message(self, tmp_path: Path) -> None:
+    def test_unreadable_file_in_directory_error_message(
+        self, unreadable_in_directory_result: subprocess.CompletedProcess[str]
+    ) -> None:
         """Unreadable file in directory shows error message."""
-        subdir = tmp_path / "subdir"
-        subdir.mkdir()
-        unreadable = subdir / "unreadable.py"
-        unreadable.write_text("clean\n")
-        unreadable.chmod(0o000)
-        readable = subdir / "readable.py"
-        readable.write_text("# pylint: disable=foo\n")
-        try:
-            result = run_cli("--tools", "pylint", str(subdir))
-            assert "Error reading" in result.stderr
-        finally:
-            unreadable.chmod(0o644)
+        assert "Error reading" in unreadable_in_directory_result.stderr
 
     def test_unreadable_file_in_directory_continues_scanning(
-        self, tmp_path: Path
+        self, unreadable_in_directory_result: subprocess.CompletedProcess[str]
     ) -> None:
         """Unreadable file in directory continues scanning other files."""
-        subdir = tmp_path / "subdir"
-        subdir.mkdir()
-        unreadable = subdir / "unreadable.py"
-        unreadable.write_text("clean\n")
-        unreadable.chmod(0o000)
-        readable = subdir / "readable.py"
-        readable.write_text("# pylint: disable=foo\n")
-        try:
-            result = run_cli("--tools", "pylint", str(subdir))
-            assert "pylint: disable" in result.stdout
-        finally:
-            unreadable.chmod(0o644)
+        assert "pylint: disable" in unreadable_in_directory_result.stdout
 
 
 @pytest.mark.e2e
@@ -1088,135 +1021,41 @@ class TestExtensionFiltering:
 class TestRealisticScenarios:
     """E2E tests with realistic file content."""
 
-    def test_python_file_with_mixed_content_returncode(self, tmp_path: Path) -> None:
+    def test_python_file_with_mixed_content_returncode(
+        self, mixed_python_result: subprocess.CompletedProcess[str]
+    ) -> None:
         """Realistic Python file with some suppressions exits 1."""
-        test_file = tmp_path / "example.py"
-        test_file.write_text('''"""Module docstring."""
+        assert mixed_python_result.returncode == 1
 
-import os
-import sys  # type: ignore[import]
-
-# pylint: disable=too-many-arguments
-def complex_function(a, b, c, d, e, f):
-    """Do something complex."""
-    result = a + b + c + d + e + f
-    return result  # type: ignore
-
-
-class MyClass:
-    """A class."""
-
-    def method(self):
-        """A method."""
-        pass  # pylint: disable=unnecessary-pass
-''')
-        result = run_cli("--tools", "pylint,mypy", str(test_file))
-        assert result.returncode == 1
-
-    def test_python_file_with_mixed_content_count(self, tmp_path: Path) -> None:
+    def test_python_file_with_mixed_content_count(
+        self, mixed_python_result: subprocess.CompletedProcess[str]
+    ) -> None:
         """Realistic Python file reports all findings."""
-        test_file = tmp_path / "example.py"
-        test_file.write_text('''"""Module docstring."""
+        assert len(mixed_python_result.stdout.strip().split("\n")) == 4
 
-import os
-import sys  # type: ignore[import]
-
-# pylint: disable=too-many-arguments
-def complex_function(a, b, c, d, e, f):
-    """Do something complex."""
-    result = a + b + c + d + e + f
-    return result  # type: ignore
-
-
-class MyClass:
-    """A class."""
-
-    def method(self):
-        """A method."""
-        pass  # pylint: disable=unnecessary-pass
-''')
-        result = run_cli("--tools", "pylint,mypy", str(test_file))
-        lines = result.stdout.strip().split("\n")
-        assert len(lines) == 4
-
-    def test_yaml_file_with_mixed_content_returncode(self, tmp_path: Path) -> None:
+    def test_yaml_file_with_mixed_content_returncode(
+        self, mixed_yaml_result: subprocess.CompletedProcess[str]
+    ) -> None:
         """Realistic YAML file with some suppressions exits 1."""
-        test_file = tmp_path / "config.yaml"
-        test_file.write_text('''---
-# yamllint disable-file
-name: example
-settings:
-  debug: true
-  log_level: info  # yamllint disable-line rule:truthy
-  max_connections: 100
-''')
-        result = run_cli("--tools", "yamllint", str(test_file))
-        assert result.returncode == 1
+        assert mixed_yaml_result.returncode == 1
 
-    def test_yaml_file_with_mixed_content_count(self, tmp_path: Path) -> None:
+    def test_yaml_file_with_mixed_content_count(
+        self, mixed_yaml_result: subprocess.CompletedProcess[str]
+    ) -> None:
         """Realistic YAML file reports all findings."""
-        test_file = tmp_path / "config.yaml"
-        test_file.write_text('''---
-# yamllint disable-file
-name: example
-settings:
-  debug: true
-  log_level: info  # yamllint disable-line rule:truthy
-  max_connections: 100
-''')
-        result = run_cli("--tools", "yamllint", str(test_file))
-        lines = result.stdout.strip().split("\n")
-        assert len(lines) == 2
+        assert len(mixed_yaml_result.stdout.strip().split("\n")) == 2
 
-    def test_clean_python_file_returncode(self, tmp_path: Path) -> None:
+    def test_clean_python_file_returncode(
+        self, clean_python_result: subprocess.CompletedProcess[str]
+    ) -> None:
         """Clean Python file without any suppressions exits 0."""
-        test_file = tmp_path / "clean.py"
-        test_file.write_text('''"""Clean module."""
+        assert clean_python_result.returncode == 0
 
-from typing import List
-
-
-def add_numbers(numbers: List[int]) -> int:
-    """Add all numbers in the list."""
-    return sum(numbers)
-
-
-def main() -> None:
-    """Main entry point."""
-    result = add_numbers([1, 2, 3, 4, 5])
-    print(f"Sum: {result}")
-
-
-if __name__ == "__main__":
-    main()
-''')
-        result = run_cli("--tools", "pylint,mypy", str(test_file))
-        assert result.returncode == 0
-
-    def test_clean_python_file_no_output(self, tmp_path: Path) -> None:
+    def test_clean_python_file_no_output(
+        self, clean_python_result: subprocess.CompletedProcess[str]
+    ) -> None:
         """Clean Python file produces no output."""
-        test_file = tmp_path / "clean.py"
-        test_file.write_text('''"""Clean module."""
-
-from typing import List
-
-
-def add_numbers(numbers: List[int]) -> int:
-    """Add all numbers in the list."""
-    return sum(numbers)
-
-
-def main() -> None:
-    """Main entry point."""
-    result = add_numbers([1, 2, 3, 4, 5])
-    print(f"Sum: {result}")
-
-
-if __name__ == "__main__":
-    main()
-''')
-        result = run_cli("--tools", "pylint,mypy", str(test_file))
-        assert result.stdout == ""
+        assert clean_python_result.stdout == ""
 
 
 @pytest.mark.e2e
@@ -1293,25 +1132,17 @@ class TestAlphabeticalSorting:
         result = run_cli("--tools", "pylint", "--verbose", str(tmp_path))
         assert result.returncode == 1
 
-    def test_files_scanned_alphabetically_first(self, tmp_path: Path) -> None:
+    def test_files_scanned_alphabetically_first(
+        self, alphabetical_scan_lines: list[str]
+    ) -> None:
         """First file scanned is alphabetically first."""
-        (tmp_path / "z_file.py").write_text("# pylint: disable=a\n")
-        (tmp_path / "a_file.py").write_text("# pylint: disable=b\n")
-        (tmp_path / "m_file.py").write_text("# pylint: disable=c\n")
-        result = run_cli("--tools", "pylint", "--verbose", str(tmp_path))
-        lines = result.stdout.splitlines()
-        scan_lines = [line for line in lines if line.startswith("Scanning:")]
-        assert "a_file.py" in scan_lines[0]
+        assert "a_file.py" in alphabetical_scan_lines[0]
 
-    def test_files_scanned_alphabetically_order(self, tmp_path: Path) -> None:
+    def test_files_scanned_alphabetically_order(
+        self, alphabetical_scan_lines: list[str]
+    ) -> None:
         """Files are scanned in alphabetical order."""
-        (tmp_path / "z_file.py").write_text("# pylint: disable=a\n")
-        (tmp_path / "a_file.py").write_text("# pylint: disable=b\n")
-        (tmp_path / "m_file.py").write_text("# pylint: disable=c\n")
-        result = run_cli("--tools", "pylint", "--verbose", str(tmp_path))
-        lines = result.stdout.splitlines()
-        scan_lines = [line for line in lines if line.startswith("Scanning:")]
-        assert "m_file.py" in scan_lines[1]
+        assert "m_file.py" in alphabetical_scan_lines[1]
 
     def test_findings_output_alphabetically_returncode(self, tmp_path: Path) -> None:
         """Findings output alphabetically exits 1."""
